@@ -55,9 +55,10 @@ def ssim(img1, img2, window_size=11, size_average=True, mask=None, sigma=0.5):
         window = window.cuda(img1.get_device())
     window = window.type_as(img1)
 
-    return _ssim(img1, img2, window, window_size, channel, size_average,mask=mask)
+    return _ssim(img1, img2, window, window_size, channel, size_average, mask=mask)
 
 
+# Metrics from monodepth2 https://arxiv.org/pdf/1806.01260.pdf "Digging Into Self-Supervised Monocular Depth Estimation"
 def _compute_depth_errors(gt, pred):
     """Computation of error metrics between predicted and ground truth depths
     """
@@ -72,14 +73,11 @@ def _compute_depth_errors(gt, pred):
     rmse_log = (torch.log(gt) - torch.log(pred)) ** 2
     rmse_log = torch.sqrt(rmse_log.mean())
 
-    abs_log = torch.mean(torch.abs(torch.log(gt) - torch.log(pred)))
-
     abs_rel = torch.mean(torch.abs(gt - pred) / gt)
-    abs_diff = torch.mean(torch.abs(gt - pred))
 
     sq_rel = torch.mean((gt - pred) ** 2 / gt)
 
-    return abs_diff, abs_rel, sq_rel, rmse, rmse_log, abs_log, a1, a2, a3
+    return abs_rel, sq_rel, rmse, rmse_log, a1, a2, a3
 
 
 def compute_depth_metrics(depth_gt, depth_pred):
@@ -102,13 +100,13 @@ def compute_depth_metrics(depth_gt, depth_pred):
     depth_pred = depth_pred[mask]
     depth_pred *= torch.median(depth_gt) / torch.median(depth_pred)
 
-    depth_pred = torch.clamp(depth_pred, min=1e-3, max=80)
+    # depth_pred = torch.clamp(depth_pred, min=1e-3, max=80)
 
     depth_errors = _compute_depth_errors(depth_gt, depth_pred)
 
-    depth_metric_names = ["de/abs_diff", "de/abs_rel", "de/sq_rel", "de/rms", "de/log_rms", "de/log_abs", "da/a1", "da/a2", "da/a3"]
+    depth_metric_names = ["depth/abs_rel", "depth/sq_rel", "depth/rms", "depth/log_rms", "depth/a1", "depth/a2", "depth/a3"]
 
-    losses={}
-    for i, metric in enumerate(depth_metric_names):
-        losses[metric] = np.array(depth_errors[i].cpu())
-    return losses
+    metrics = {}
+    for i, metric_name in enumerate(depth_metric_names):
+        metrics[metric_name] = depth_errors[i].item()
+    return metrics  # TODO secondo me va diviso per il batch_size

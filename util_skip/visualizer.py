@@ -23,14 +23,14 @@ class Visualizer():
             self.vis = visdom.Visdom(port=opt.display_port)
 
         if self.use_html:
-            self.web_dir = os.path.join(opt.save_path, opt.name, 'web')
+            self.web_dir = os.path.join(opt.save_path, 'web')
             self.img_dir = os.path.join(self.web_dir, 'images')
 
             self.anim_dir = os.path.join(self.web_dir, 'anim')
 
             print('create web directory %s...' % self.web_dir)
             util.mkdirs([self.web_dir, self.img_dir, self.anim_dir])
-        self.log_name = os.path.join(opt.save_path, opt.name, 'loss_log.txt')
+        self.log_name = os.path.join(opt.save_path, 'loss_log.txt')
         with open(self.log_name, "a") as log_file:
             now = time.strftime("%c")
             log_file.write('================ Training Loss (%s) ================\n' % now)

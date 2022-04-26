@@ -27,12 +27,12 @@ def tensor2im(tensor, colormap='rainbow', imtype=np.uint8):
     tensor = tensor.detach().cpu().float()
     if tensor.ndimension() == 2 or tensor.size(0) == 1:
         array = tensor.squeeze().numpy()
-        norm_array = (array - array.min()) / (array.max() - array.min())
+        norm_array = (array - array.min()) / (array.max() - array.min()) if np.any(array) else array
         array = COLORMAPS[colormap](norm_array).astype(np.float32) * 255.
     elif tensor.ndimension() == 3:
         assert (tensor.size(0) == 3)
-        array = tensor.numpy().transpose((1, 2, 0)) * 255.
-        # array = 0.5 + tensor.numpy()*0.5
+        array = tensor.numpy() * 0.5 + 0.5
+        array = array.transpose((1, 2, 0)) * 255.
     array = array.astype(imtype).copy()
     return array
 

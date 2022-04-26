@@ -40,8 +40,6 @@ class depthDecoder(nn.Module):
         return out
 
 
-
-
 class Encoder(nn.Module):
     def __init__(self, input_nc, nf=64, n_layers=6, nz=200, dropout=False):
         super(Encoder, self).__init__()

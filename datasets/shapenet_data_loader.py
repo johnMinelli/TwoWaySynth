@@ -72,12 +72,12 @@ class ShapeNetDataset(data.Dataset):
         id_target = sample_data["targets"][0]
 
         # load images
-        A = self.load_image(id_source)  # interchanged
-        B = self.load_image(id_target)
+        A = self.load_image(id_source) / 255. * 2 - 1
+        B = self.load_image(id_target) / 255. * 2 - 1
 
         if self.use_depth:
-            DA = self.load_depth_image((self.data_root/id_source).stripext()+"_sparse_depth.png")
-            DB = self.load_depth_image((self.data_root/id_target).stripext()+"_sparse_depth.png")
+            DA = 1-(self.load_depth_image((self.data_root/id_source).stripext()+"_sparse_depth.png") / 255.)
+            DB = 1-(self.load_depth_image((self.data_root/id_target).stripext()+"_sparse_depth.png") / 255.)
 
         # intrinsics
         I = sample_data["intrinsics"].astype(np.float32)
@@ -95,14 +95,15 @@ class ShapeNetDataset(data.Dataset):
         PA, PA_scale = sample_data["pose_ref"]
         PB, PB_scale = sample_data["pose_targets"][0]
 
-        T = np.array([0, 0, 1]).reshape((3, 1))
+        S = (1 - (PB_scale - PA_scale))
+        T = np.array([0, 0, 2]).reshape((3, 1))
         R = np.linalg.inv(np.linalg.inv(PA) @ PB) @ (np.eye(3) * (1 - (PA_scale - PB_scale)))
 
         T = -R.dot(T)+T
         RT = np.block([[R, T], [np.zeros((1, 3)), 1]]).astype(np.float32)
 
         A, B = self.transform([A, B], self.train)  # as tensors; change CHW format; crop; normalize
-        return {'A': A, 'B': B, 'RT': RT, 'DA': DA, 'DB': DB, 'I': I}
+        return {'A': A, 'B': B, 'RT': RT, 'S': S, 'DA': DA, 'DB': DB, 'I': I}
 
     def __len__(self):
         return self.dataset_size
@@ -118,7 +119,7 @@ class ShapeNetDataset(data.Dataset):
         """
         image_path = os.path.join(self.data_root, filename)
         im = Image.open(image_path)
-        image = np.asarray(im.convert('RGB')) / 255.
+        image = np.asarray(im.convert('RGB'))
         im.close()
         return image
 
@@ -130,7 +131,7 @@ class ShapeNetDataset(data.Dataset):
         """
         image_path = os.path.join(self.data_root, filename)
         im = Image.open(image_path)
-        image = 1-(np.expand_dims(np.asarray(im, dtype=np.float32)[:,:,0],0)/255.)
+        image = np.expand_dims(np.asarray(im, dtype=np.float32)[:,:,0],0)
         # norm_img = (img - img.min()) / (img.max() - img.min())
         # image = np.clip(image, 0, self.args.max_depth)
         im.close()

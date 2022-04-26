@@ -77,8 +77,8 @@ class Logger(object):
                     self.tensorboard.add_scalar(self.prefix+"/"+name, error, self.total_steps + step)
                 self.losses.update(list(errors.items()), current_batch_size)
             # metrics
-            for name, error in metrics.items():
-                self.tensorboard.add_scalar(self.prefix+"/"+name, error, self.total_steps + step)
+            for name, metric in metrics.items():
+                self.tensorboard.add_scalar(self.prefix+"/"+name, metric, self.total_steps + step)
             self.metrics.update(list(metrics.items()), current_batch_size)
             # time
             self.step_time.update(time.time() - self.chronometer, current_batch_size)
@@ -94,14 +94,16 @@ class Logger(object):
             self.epoch_bar.finish()
             self.writer.write('End of epoch %d / %d \t Time Taken: %d sec' % (self.epoch, self.n_epochs, time.time() - self.epoch_start_time))
 
+            avg_losses = self.losses.avg
             avg_time = self.step_time.avg[0]
-            avg_losses = self.losses.avg[0] if len(self.losses.avg) > 0 else 0
-            avg_metrics = self.metrics.avg[0]
-            self.log(' * Avg Loss : {:.3f} - Avg Metrics : {:.3f} - Avg Time : {:.3f}'.format(avg_losses, avg_metrics, avg_time))
+            avg_metrics = self.metrics.avg
 
-            self.progress_bar.update(self.epoch + 1)
-            if self.epoch + 1 == self.n_epochs:
-                self.progress_bar.finish()
+            self.log(' * Avg Metrics : '+', '.join(["{}: {:.3f}".format(n,v) for n,v in zip(self.metrics.names, avg_metrics)])+'- Avg Time : {:.3f}'.format(avg_time))
+
+            if self.progress_bar is not None:
+                self.progress_bar.update(self.epoch + 1)
+                if self.epoch + 1 == self.n_epochs:
+                    self.progress_bar.finish()
 
             self.step_time.avg = None
             self.losses.avg = None

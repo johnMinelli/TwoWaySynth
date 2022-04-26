@@ -6,16 +6,19 @@ import torch.nn.functional as F
 import torch
 import torchvision
 
-from models_skip.network_utils.losses import depth_loss
+from models_skip.network_utils.depth_decoder import DepthDecoder
+from models_skip.network_utils.losses import depth_loss, get_depth_smoothness, photometric_reconstruction_loss
 from models_skip.network_utils.metrics import compute_depth_metrics
 from models_skip.network_utils.projection_layer import inverse_warp
 from models_skip.network_utils import networks
 from models_skip.network_utils.metrics import ssim
+from models_skip.network_utils.resnet_encoder import ResnetEncoder
 from util_skip.util import tensor2im
 from collections import OrderedDict
+from skimage.transform import warp
 import numpy as np
 import itertools
-import cv2
+from path import Path
 import os
 
 
@@ -27,8 +30,9 @@ class BaseModel():
         self.opt = opt
         self.gpu_ids = opt.gpu_ids
         self.isTrain = opt.isTrain
-        self.backup_dir = os.path.join(opt.save_path, opt.name)
+        self.backup_dir = opt.save_path
         self.category = opt.dataset
+        self.start_epoch = 0
 
         self.count = 0
         self.train_mode = True
@@ -44,6 +48,11 @@ class BaseModel():
             # self.device = torch.device('cuda:%d' % opt.gpu_ids[0])
             self.device = torch.device("cuda")
 
+        # self.enc = ResnetEncoder(18, pretrained=True).to(self.device)
+        # self.dec = networks.Decoder(output_nc=3, nz=opt.nz_geo * 3).to(self.device)
+        # self.depthdec = DepthDecoder(self.enc.num_ch_enc, [0, 1, 2, 3]).to(self.device)
+        # self.vgg = VGGPerceptualLoss().to(self.device)
+
         self.enc = nn.DataParallel(networks.Encoder(input_nc=3, nz=opt.nz_geo * 3)).to(self.device)
         self.dec = nn.DataParallel(networks.Decoder(output_nc=3, nz=opt.nz_geo * 3)).to(self.device)
         self.depthdec = nn.DataParallel(networks.depthDecoder(output_nc=1, nz=opt.nz_geo * 3)).to(self.device)
@@ -56,7 +65,7 @@ class BaseModel():
         param_list = []
         for name, model in self.net_dict.items():
             if not self.isTrain or opt.continue_train is not None:
-                self.load_network(model, load_dir=self.backup_dir, epoch_label=opt.continue_train, network_label=name)
+                self.start_epoch = self.load_network(model, load_dir=self.backup_dir, epoch_label=opt.continue_train, network_label=name)
             else:
                 networks.init_weights(model, init_type=opt.init_type)
 
@@ -84,7 +93,7 @@ class BaseModel():
                 [718.9, 0., 128, \
                  0., 718.9, 128, \
                  0., 0., 1.]).reshape((3, 3))
-            self.depth_bias = 0 
+            self.depth_bias = 0
             self.depth_scale = 1
             self.depth_scale_vis = 250. / self.depth_scale
             self.depth_bias_vis = 0.
@@ -104,9 +113,10 @@ class BaseModel():
         self.real_A = Variable(input['A'].to(self.device))
         self.real_depth_A = Variable(input['DA'].to(self.device))
         self.real_B = Variable(input['B'].to(self.device))
-        self.real_depth_B = Variable(input['DB'].to(self.device))
+        self.real_depth_B = Variable(input['DB'].to(self.device)) # TODO check if *self.depth_scale+self.depth_bias should be moved here
         self.real_RT = Variable(input['RT'].squeeze().to(self.device))
         self.intrinsics = input['I'][:,:,:3].to(self.device)
+        self.scale_factor = input['S'].numpy()
         self.batch_size = self.real_A.size(0)
 
     def forward(self):
@@ -145,14 +155,14 @@ class BaseModel():
                                                                             self.conv4_tf)
 
     def encode(self, image_tensor):
-        return self.enc(image_tensor*2-1)
+        return self.enc(image_tensor)
 
     def transform(self,z,RT):
         return networks.transform_code(z, self.opt.nz_geo, RT.inverse(), object_centric=self.opt.dataset in ['shapenet'])
 
     def decode(self,z_a, conv0, conv2, conv3, conv4):
         output = self.dec(z_a, conv0, conv2, conv3, conv4)
-        return [torch.tanh(out) * 0.5 + 0.5 for out in output]
+        return [torch.tanh(out) for out in output]
 
     def depthdecode(self,z):
         output = self.depthdec(z)
@@ -170,23 +180,26 @@ class BaseModel():
                  + 0.2*F.l1_loss(torch.nn.functional.upsample(self.fake_B2, scale_factor=4),self.real_B) \
                  + 0.1*F.l1_loss(torch.nn.functional.upsample(self.fake_B1, scale_factor=8), self.real_B)
         # image with depth quality
-        self.loss_depth_smooth = self.get_depth_smoothness(self.depth_a2b, self.real_B) \
-                                 + self.get_depth_smoothness(self.depth_a, self.real_A)
-        # transformation/warping quality
-        self.loss_warp = F.l1_loss(self.warp_fake_B, self.real_B)
-        # encoder quality and depth_decoder quality
+        self.loss_depth_smooth = get_depth_smoothness(self.depth_a2b, self.real_B) \
+                                 + get_depth_smoothness(self.depth_a, self.real_A)
+
+        # transformation/warping quality  # TODO equivalent to multiscale version 'photometric_reconstruction_loss'
+        # scaled_A = self.scale_image(self.real_A, self.scale_factor, self.scale_factor)
+        # self.loss_warp = F.l1_loss(self.warp_fake_B[scaled_A>0].requires_grad_(), self.real_B[scaled_A>0])
+        self.loss_warp, warped, diff = photometric_reconstruction_loss(self.real_B, self.real_A, self.intrinsics, self.depth_a2b, self.real_RT)
+        # self.loss_warp = F.l1_loss(self.warp_fake_B, self.real_B)
+        # encoder quality and depth_decoder quality  # TODO to enable if we want to use the gt_depth
         self.loss_depth = 0  # depth_loss(self.real_depth_B, self.real_flow_B, self.depth_a2b, self.fake_flow_B)
+        # F.l1_loss(self.depth_a2b, self.depth_b)
         # VGG perceptual loss
         self.vgg_loss = self.vgg(self.fake_B, self.real_B)
 
-
-        self.loss_G = (self.loss_reco+self.loss_warp) * self.opt.lambda_recon
-        self.loss_G += self.vgg_loss * self.opt.lambda_vgg
-        self.loss_G += self.loss_depth_smooth * self.opt.lambda_smooth
-        self.loss_G += self.loss_depth * self.opt.lambda_depth
+        self.loss_G = (self.loss_reco+self.loss_warp) * self.opt.lambda_recon  # 10.0
+        self.loss_G += self.vgg_loss * self.opt.lambda_vgg  # 1.0
+        self.loss_G += self.loss_depth_smooth * self.opt.lambda_smooth  # 10.0
+        self.loss_G += self.loss_depth * self.opt.lambda_depth  # 10.0
 
         self.loss_G.backward()
-
 
     def optimize_parameters(self):
         """
@@ -231,11 +244,10 @@ class BaseModel():
         Returns the metrics for the current inputs.
         """
 
-        return OrderedDict({**compute_depth_metrics(self.real_depth_B, self.depth_a2b), **{
-                            'L1': F.l1_loss(self.depth_a2b[self.real_depth_B>0], self.real_depth_B[self.real_depth_B>0]).item() if torch.any(self.real_depth_B>0) else 0,
-                            'Depth_Accuracy': torch.mean(torch.eq(torch.round(self.real_depth_B), torch.round(self.depth_a2b)).type(torch.FloatTensor))  # custom soft accuracy
-                            # 'SSIM': ssim((self.fake_B + 1) / 2, (self.real_B + 1) / 2).item()
-                            }})
+        return OrderedDict({
+                            'SSIM': ssim((self.fake_B + 1) / 2, (self.real_B + 1) / 2).item(),
+                            'L1': F.l1_loss(self.depth_a2b, self.real_depth_B).item()
+                            },**compute_depth_metrics(self.real_depth_B, self.depth_a2b))
 
     def get_current_anim(self):
         self.switch_mode('eval')
@@ -262,10 +274,10 @@ class BaseModel():
         from scipy.spatial.transform import Rotation as ROT
         if self.opt.dataset in ['shapenet']:
             T = np.array([0, 0, 2]).reshape((3, 1))
-            R = ROT.from_euler('xyz', vec[:3]).as_dcm()
+            R = ROT.from_euler('xyz', vec[:3]).as_matrix()
             T = -R.dot(T) + T
         else:
-            R = ROT.from_euler('xyz', vec[0:3]).as_dcm()
+            R = ROT.from_euler('xyz', vec[0:3]).as_matrix()
             T = vec[3:].reshape((3, 1))
         mat = np.block([[R, T], [np.zeros((1, 3)), 1]])
 
@@ -281,6 +293,16 @@ class BaseModel():
         K[:, 1, 2] *= scale
         return K
 
+    def scale_image(self, img, scale_x, scale_y):
+        scale_mat = torch.eye(3).unsqueeze(0).repeat(self.batch_size, 1, 1).numpy()
+        scale_mat[:, 0, 0] = scale_x
+        scale_mat[:, 0, 2] = (self.real_A.size()[3] - (self.real_A.size()[3] * scale_x)) / 2
+        scale_mat[:, 1, 1] = scale_y
+        scale_mat[:, 1, 2] = (self.real_A.size()[2] - (self.real_A.size()[2] * scale_y)) / 2
+        scaled_image = torch.from_numpy(np.array([warp(tensor2im(im), np.linalg.inv(sc)) for im, sc in
+                                              zip(self.real_A, scale_mat)]).transpose((0, 3, 1, 2)))
+        return scaled_image
+
     def switch_mode(self, mode):
         assert(mode in ['train', 'eval'])
         self.train_mode = mode == "train"
@@ -294,7 +316,7 @@ class BaseModel():
 
     # helper saving function that can be used by subclasses
     def save_network(self, network, network_label, epoch_label, save_dir=None):
-        save_filename = '%s_net_%s.pth' % (epoch_label, network_label)
+        save_filename = '{:04}_net_{}.pth'.format(epoch_label, network_label)
         if save_dir is None: save_dir = self.backup_dir
         save_path = os.path.join(save_dir, save_filename)
         torch.save(network.state_dict(), save_path)
@@ -304,11 +326,12 @@ class BaseModel():
         if load_dir is None: load_dir = self.backup_dir
         if epoch_label == -1:
             load_filename = '*_net_%s.pth' % (network_label)
-            load_path = glob.glob(os.path.join(load_dir, load_filename))[-1]
+            load_path = Path(sorted(glob.glob(os.path.join(load_dir, load_filename)))[-1])
         else:
             load_filename = '%s_net_%s.pth' % (epoch_label, network_label)
             load_path = os.path.join(load_dir, load_filename)
         network.load_state_dict(torch.load(load_path))
+        return int(load_path.name.split('_')[0])
 
     # update learning rate (called once every epoch)
     def update_learning_rate(self):
@@ -316,33 +339,6 @@ class BaseModel():
         #    scheduler.step()
         lr = self.optimizers[0].param_groups[0]['lr']
         print('learning rate = %.7f' % lr)
-
-    def get_edge_loss(self, in1, in2):
-        gradients_x1 = torch.add(in1[:, :, :-1, :], -1, in1[:, :, 1:, :])
-        gradients_y1 = torch.add(in1[:, :, :, :-1], -1, in1[:, :, :, 1:])
-
-        gradients_x2 = torch.add(in2[:, :, :-1, :], -1, in2[:, :, 1:, :])
-        gradients_y2 = torch.add(in2[:, :, :, :-1], -1, in2[:, :, :, 1:])
-
-        diff_x = torch.mean(torch.abs(gradients_x1 - gradients_x2))
-        diff_y = torch.mean(torch.abs(gradients_y1 - gradients_y2))
-
-        return diff_x + diff_y
-
-    def get_depth_smoothness(self, depth, img):
-        d_gradients_x = torch.add(depth[:, :, :-1, :], other=depth[:, :, 1:, :], alpha=-1)
-        d_gradients_y = torch.add(depth[:, :, :, :-1], other=depth[:, :, :, 1:], alpha=-1)
-
-        image_gradients_x = torch.add(img[:, :, :-1, :], other=img[:, :, 1:, :], alpha=-1)
-        image_gradients_y = torch.add(img[:, :, :, :-1], other=img[:, :, :, 1:], alpha=-1)
-
-        weights_x = torch.exp(-10.0 * torch.mean(torch.abs(image_gradients_x), 1, keepdim=True))
-        weights_y = torch.exp(-10.0 * torch.mean(torch.abs(image_gradients_y), 1, keepdim=True))
-
-        smoothness_x = torch.mean(torch.abs(d_gradients_x) * weights_x)
-        smoothness_y = torch.mean(torch.abs(d_gradients_y) * weights_y)
-
-        return smoothness_x + smoothness_y
 
 
 class VGGPerceptualLoss(torch.nn.Module):

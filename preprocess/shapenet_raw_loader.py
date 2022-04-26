@@ -68,7 +68,7 @@ class ShapeNetRawLoader(object):
             s = []
             for pos in parse_line_metadata(file.read()):
                 # r = self.pose_vec2mat(translation=[0,0,0], rototranslation=[0,0,0], rotation=[pos2[0],pos2[1],0], scale=pos2[3])
-                r = ROT.from_euler('xyz', [-pos[1], pos[0], pos[2]], degrees=True).as_dcm()
+                r = ROT.from_euler('xyz', [-pos[1], pos[0], pos[2]], degrees=True).as_matrix()
                 scale = pos[3]
                 s.append((r, scale))
             scene_data['pose'] = s

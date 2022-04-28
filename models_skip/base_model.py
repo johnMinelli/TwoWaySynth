@@ -48,9 +48,9 @@ class BaseModel():
             # self.device = torch.device('cuda:%d' % opt.gpu_ids[0])
             self.device = torch.device("cuda")
 
-        # self.enc = ResnetEncoder(18, pretrained=True).to(self.device)
+        # self.enc = ResnetEncoder(18, 600, pretrained=True).to(self.device)
         # self.dec = networks.Decoder(output_nc=3, nz=opt.nz_geo * 3).to(self.device)
-        # self.depthdec = DepthDecoder(self.enc.num_ch_enc, [0, 1, 2, 3]).to(self.device)
+        # self.depthdec = DepthDecoder(self.enc.num_ch_enc, 600, [0, 1, 2, 3]).to(self.device)
         # self.vgg = VGGPerceptualLoss().to(self.device)
 
         self.enc = nn.DataParallel(networks.Encoder(input_nc=3, nz=opt.nz_geo * 3)).to(self.device)
@@ -154,11 +154,26 @@ class BaseModel():
                                                                             self.conv3_tf,
                                                                             self.conv4_tf)
 
+    def forward_res(self):
+        self.z_features = self.encode(self.real_A)
+
+        self.z_features_a2b = self.transform_resnet(self.z_features, self.real_RT)
+        # get depth from latent
+        self.depth_scales_a2b = self.depthdecode(self.z_features_a2b)
+
+        # warp depth scales
+        # use 'self.depth_scales_a2b' to warp 'self.z_features' into 'self.z_features_tf'
+
+        self.fake_B, self.fake_B3, self.fake_B2, self.fake_B1 = self.decode(self.z_a2b, self.z_features_tf)
+
     def encode(self, image_tensor):
         return self.enc(image_tensor)
 
     def transform(self,z,RT):
         return networks.transform_code(z, self.opt.nz_geo, RT.inverse(), object_centric=self.opt.dataset in ['shapenet'])
+
+    def transform_resnet(self, z_features, RT):
+        return [self.transform(z, RT) for z in z_features]
 
     def decode(self,z_a, conv0, conv2, conv3, conv4):
         output = self.dec(z_a, conv0, conv2, conv3, conv4)

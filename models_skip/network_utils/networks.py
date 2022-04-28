@@ -72,7 +72,7 @@ class Encoder(nn.Module):
 
         self.conv1, self.conv2, self.conv3, self.conv4, self.conv5, self.conv6 = self.convs
 
-        fc = [nn.Linear(4*4*nf * nf_mult, nz)] #24320
+        fc = [nn.Linear(4*4*nf * nf_mult, nz)]  #24320
         if dropout: fc += [nn.Dropout(0.3)]
         self.fc = nn.Sequential(*fc)
 

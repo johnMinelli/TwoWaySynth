@@ -5,7 +5,7 @@ from torch import nn
 
 
 class depthDecoder(nn.Module):
-    def __init__(self, output_nc, nf=64, n_layers=8, n_bilinear_layers=6, nz=200,dropout=False):
+    def __init__(self, output_nc, nf=64, n_layers=8, n_bilinear_layers=6, nz=200, dropout=False):
         super(depthDecoder, self).__init__()
 
         norm_layer = get_norm_layer(norm_type='batch')
@@ -131,7 +131,7 @@ class Decoder(nn.Module):
 
             else:
                 deconv += upsampleLayer( int(nf * nf_mult_prev), int(nf * nf_mult), upsample=upsample)
-                deconv += [norm_layer( int(nf * nf_mult) ),nl_layer()]
+                deconv += [norm_layer( int(nf * nf_mult)), nl_layer()]
 
             self.deconvs.append(nn.Sequential(*deconv))
 
@@ -252,11 +252,11 @@ def get_non_linearity(layer_type='relu'):
 def get_scheduler(optimizer, opt):
     if opt.lr_policy == 'lambda':
         def lambda_rule(epoch):
-            lr_l = 1.0 - max(0, epoch + 1 + opt.epoch_count - opt.niter) / float(opt.niter_decay + 1)
+            lr_l = 1.0 - max(0, epoch + 1 - opt.lr_niter_frozen) / float(opt.lr_niter_decay + 1)
             return lr_l
         scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
     elif opt.lr_policy == 'step':
-        scheduler = lr_scheduler.StepLR(optimizer, step_size=opt.lr_decay_iters, gamma=0.1)
+        scheduler = lr_scheduler.StepLR(optimizer, step_size=opt.lr_decay_every, gamma=0.1)
     elif opt.lr_policy == 'plateau':
         scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, threshold=0.01, patience=5)
     else:

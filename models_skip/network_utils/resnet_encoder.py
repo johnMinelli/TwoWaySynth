@@ -18,8 +18,7 @@ class ResnetEncoder(nn.Module):
     def __init__(self, num_layers, nz=200, dropout=False, pretrained=True):
         super(ResnetEncoder, self).__init__()
 
-        self.num_ch_enc = np.array([64, 128, 256, 512])
-        self.n_layers = np.array([64*64*64, 128*32*32, 256*16*16, 512*8*8])
+        self.num_ch_enc = np.array([64, 64, 128, 256, 512])
 
         resnets = {18: models.resnet18,
                    34: models.resnet34,
@@ -30,27 +29,30 @@ class ResnetEncoder(nn.Module):
         if num_layers not in resnets:
             raise ValueError("{} is not a valid number of resnet layers".format(num_layers))
 
-        self.encoder = resnets[num_layers](pretrained)
+        self.encoder = resnets[num_layers](pretrained).to(torch.device('cuda'))
 
         if num_layers > 34:
             self.num_ch_enc[1:] *= 4
+        final_dim = np.exp2(np.log2(self.num_ch_enc.max())-np.log2(self.num_ch_enc.min())).astype(np.int)
+        fc = [nn.Linear(self.num_ch_enc[-1]*final_dim*final_dim, nz)]  #512*8*8
+        if dropout: fc += [nn.Dropout(0.3)]
+        self.fc = nn.Sequential(*fc)
 
-        self.fc_modules = []
-        for size in self.n_layers:
-            fc = [nn.Linear(size, nz)]  # FIXME per adesso lo spiaccico a 200 fisso
-            if dropout: fc += [nn.Dropout(0.3)]
-            fc = nn.Sequential(*fc).to(torch.device('cuda'))
-            self.fc_modules.append(fc)
+    def to(self, device):
+        self.fc.to(device)
+        super().to(device)
+        return self
 
     def forward(self, input_image):
         self.features = []
-        b = input_image.size(0)
-        x = (input_image - 0.45) / 0.225
-        x = self.encoder.conv1(x)
+        x = self.encoder.conv1(input_image)
         x = self.encoder.bn1(x)
-        x = self.encoder.relu(x)
-        self.features.append(self.encoder.layer1(self.encoder.maxpool(x)))
+        self.features.append(self.encoder.relu(x))
+        self.features.append(self.encoder.layer1(self.encoder.maxpool(self.features[-1])))
         self.features.append(self.encoder.layer2(self.features[-1]))
         self.features.append(self.encoder.layer3(self.features[-1]))
         self.features.append(self.encoder.layer4(self.features[-1]))
-        return [self.fc_modules[i](f.view(b, -1)) for i, f in enumerate(self.features)]
+
+        return self.fc(self.features[-1].view(input_image.size(0),-1)), self.features
+    
+    # TODO qui ho tolto il maxpool di resnet

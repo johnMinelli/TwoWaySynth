@@ -1,14 +1,11 @@
-import random
-
-import numpy as np
 import progressbar
-import sys
 import time
-
-from util_skip.util import tensor2im
-
+import wandb
+last_step =0
 
 class Logger(object):
+    global last_step
+
     def __init__(self, mode, n_epochs, data_size, terminal_print_freq=1, display_freq=1, tensorboard=None, wand=None, visualizer=None):
         self.n_epochs = n_epochs
         self.data_size = data_size
@@ -31,10 +28,12 @@ class Logger(object):
 
         if mode == "valid":
             self.prefix = "Valid"
+            self.log_only_at_end = True
             self.writer = Writer(self.t, (0, h - s + ts))
             self.bar_writer = Writer(self.t, (0, h - s + ts + 1))
         elif mode == "train":
             self.prefix = "Train"
+            self.log_only_at_end = False
             self.writer = Writer(self.t, (0, h - s + tr))
             self.bar_writer = Writer(self.t, (0, h - s + tr + 1))
             self.progress_bar = progressbar.ProgressBar(maxval=n_epochs, fd=Writer(self.t, (0, h - s + e)))
@@ -71,39 +70,43 @@ class Logger(object):
 
     def epoch_step(self, step, current_batch_size, errors, metrics):
         if self.epoch is not None:
-            # losses error
-            if errors is not None:
-                for name, error in errors.items():
-                    self.tensorboard.add_scalar(self.prefix+"/"+name, error, self.total_steps + step)
-                self.losses.update(list(errors.items()), current_batch_size)
-            # metrics
-            for name, metric in metrics.items():
-                self.tensorboard.add_scalar(self.prefix+"/"+name, metric, self.total_steps + step)
+            # losses error & metrics
+            self.losses.update(list(errors.items()), current_batch_size)
             self.metrics.update(list(metrics.items()), current_batch_size)
+            if not self.log_only_at_end:
+                current_steps = self.total_steps + step
+                self._log_stats_to_dashboards(current_steps, errors)
+                self._log_stats_to_dashboards(current_steps, metrics)
+                global last_step
+                last_step = current_steps
             # time
             self.step_time.update(time.time() - self.chronometer, current_batch_size)
             # console prints
             self.epoch_bar.update(step + 1)
-            if step % self.print_freq == 0:
-                self.writer.write('{}[{}/{}]: Time {},  Loss  {}'.format(self.prefix, self.epoch, self.n_epochs, self.step_time, self.losses))
+            if self.print_freq > 0 and step % self.print_freq == 0:
+                self.log('{}[{}/{}]: Time {}'.format(self.prefix, self.epoch, self.n_epochs, self.step_time))
+                if str(self.losses) != '': self.log('\tLoss  {}'.format(self.losses))
 
             self.chronometer = time.time()
 
     def epoch_stop(self):
         if self.epoch is not None:
             self.epoch_bar.finish()
-            self.writer.write('End of epoch %d / %d \t Time Taken: %d sec' % (self.epoch, self.n_epochs, time.time() - self.epoch_start_time))
+            self.log('End of epoch %d / %d \t Time Taken: %d sec' % (self.epoch, self.n_epochs, time.time() - self.epoch_start_time))
 
-            avg_losses = self.losses.avg
             avg_time = self.step_time.avg[0]
+            avg_losses = self.losses.avg
             avg_metrics = self.metrics.avg
 
-            self.log(' * Avg Metrics : '+', '.join(["{}: {:.3f}".format(n,v) for n,v in zip(self.metrics.names, avg_metrics)])+'- Avg Time : {:.3f}'.format(avg_time))
-
+            self.log(' * Avg Metrics : '+', '.join(["{}: {:.3f}".format(n,v) for n,v in zip(self.metrics.names, avg_metrics)])+' - Avg Time : {:.3f}'.format(avg_time)+'\n\n')
             if self.progress_bar is not None:
                 self.progress_bar.update(self.epoch + 1)
                 if self.epoch + 1 == self.n_epochs:
                     self.progress_bar.finish()
+            if self.log_only_at_end:
+                global last_step
+                self._log_stats_to_dashboards(last_step, dict(zip(self.losses.names, avg_losses)))
+                self._log_stats_to_dashboards(last_step, dict(zip(self.metrics.names, avg_metrics)))
 
             self.step_time.avg = None
             self.losses.avg = None
@@ -113,9 +116,22 @@ class Logger(object):
 
     def display_results(self, step, images):
         if step % self.display_freq == 0:
-            self.visualizer.display_current_results(images, self.total_steps+step, False)
-            for name, image in images.items():
-                self.tensorboard.add_image('{} {}'.format(self.prefix, name), image, self.total_steps+step, dataformats='HWC')
+            current_steps = self.total_steps + step
+            self.visualizer.display_current_results(images, current_steps, False)
+            if self.tensorboard is not None:
+                for name, image in images.items():
+                    self.tensorboard.add_image('{} {}'.format(self.prefix, name), image, current_steps, dataformats='HWC')
+            # if self.wandb:
+            #     wandb.log({'{}_{}'.format(self.prefix, name): wandb.Image(image, caption=name) for name, image in images.items()}, step)
+
+    def _log_stats_to_dashboards(self, step, stats):
+        for name, value in stats.items():
+            namet = self.prefix + "/" + name
+            namew = self.prefix + "/" + self.prefix.lower() + "_" + name
+            if self.tensorboard is not None:
+                self.tensorboard.add_scalar(namet, value, step)
+            if self.wandb:
+                wandb.log({namew: value}, step)
 
 class Writer(object):
     """Create an object with a write method that writes to a

@@ -78,7 +78,6 @@ def main():
     print('Retrieving frames')
     if args.num_threads == 1:
         for i, scene in enumerate(tqdm(data_loader.scenes)):
-            # if i<150: continue
             dump_example(args, scene)
     else:
         with ProcessPool(max_workers=args.num_threads) as pool:

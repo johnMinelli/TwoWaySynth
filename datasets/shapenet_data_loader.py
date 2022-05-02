@@ -1,7 +1,4 @@
-import csv
-import json
 import random
-import torch
 import numpy as np
 import torch.utils.data as data
 import os
@@ -17,7 +14,6 @@ class ShapeNetDataset(data.Dataset):
         self.train = train
         self.args = args
 
-        self.view_per_model = 54  # ???
         self.use_depth = args.depth is not None
         self.depth_scale = 1.75
         self.data_root = Path(args.data_path)
@@ -54,9 +50,9 @@ class ShapeNetDataset(data.Dataset):
             intrinsics = scenes_intrinsics[scene_id]
             poses = scenes_poses[scene_id]
             # Make sample
-            for i in range(len(poses)-self.args.n_targets):
+            for i in range(len(poses)-self.args.n_targets):  # TODO make this 2 random
                 sample = {'intrinsics': intrinsics, 'pose_ref': poses[i], 'pose_targets': [poses[i+1+j] for j in range(self.args.n_targets)],
-                          'ref': Path(scene_path/'%.2d' % i + '.png'), 'targets': [Path(scene_path/'%.2d' % (i+1+j) + '.png') for j in range(self.args.n_targets)]}
+                          'ref': Path(scene_path/'%.2d' % i), 'targets': [Path(scene_path/'%.2d' % (i+1+j)) for j in range(self.args.n_targets)]}
                 self.samples.append(sample)
 
         random.shuffle(self.samples)
@@ -71,13 +67,13 @@ class ShapeNetDataset(data.Dataset):
         id_source = sample_data["ref"]
         id_target = sample_data["targets"][0]
 
-        # load images
-        A = self.load_image(id_source) / 255. * 2 - 1
-        B = self.load_image(id_target) / 255. * 2 - 1
-
+        # load images [-1,1]
+        A = self.load_image(id_source+".png") / 255. * 2 - 1
+        B = self.load_image(id_target+".png") / 255. * 2 - 1
+        # load depth [0,1] where 1 is the furthest
         if self.use_depth:
-            DA = 1-(self.load_depth_image((self.data_root/id_source).stripext()+"_sparse_depth.png") / 255.)
-            DB = 1-(self.load_depth_image((self.data_root/id_target).stripext()+"_sparse_depth.png") / 255.)
+            DA = 1-(self.load_depth_image((self.data_root/id_source)+"_sparse_depth.png") / 255.)
+            DB = 1-(self.load_depth_image((self.data_root/id_target)+"_sparse_depth.png") / 255.)
 
         # intrinsics
         I = sample_data["intrinsics"].astype(np.float32)

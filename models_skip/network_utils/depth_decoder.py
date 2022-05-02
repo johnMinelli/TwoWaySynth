@@ -12,45 +12,40 @@ import torch.nn as nn
 
 from collections import OrderedDict
 from models_skip.network_utils.layers import *
-from models_skip.network_utils.networks import get_non_linearity
+from models_skip.network_utils.networks import get_non_linearity, get_norm_layer
 
 
 class DepthDecoder(nn.Module):
-    def __init__(self, num_ch_enc, nz, scales=range(4), num_output_channels=1, use_skips=True, dropout=False):
+    def __init__(self, num_ch_enc, nz=200, scales=range(5), num_output_channels=1, dropout=False):
         super(DepthDecoder, self).__init__()
+        norm_layer = get_norm_layer(norm_type='batch')
         nl_layer = get_non_linearity(layer_type='lrelu')
+        self.upsample_mode = 'bilinear'
+
+        fc = [nn.Linear(nz, num_ch_enc[-1]*8*8)]
+        if dropout: fc += [nn.Dropout(0.3)]
+        fc += [nl_layer()]
+        self.fc = nn.Sequential(*fc)
 
         self.num_output_channels = num_output_channels
-        self.use_skips = use_skips
-        self.upsample_mode = 'nearest'
         self.scales = scales
-
         self.num_ch_enc = num_ch_enc
         self.num_ch_dec = np.array([16, 32, 64, 128, 256])
 
-        self.fc_modules = []
-        for size in self.num_ch_enc:
-            fc = [nn.Linear(nz, size)]  #FIXME per adesso lo spiaccico a 200 fisso
-            if dropout: fc += [nn.Dropout(0.3)]
-            fc += [nl_layer()]
-            fc = nn.Sequential(*fc).to(torch.device('cuda'))
-            self.fc_modules.append(fc)
-
         # decoder
         self.convs = OrderedDict()
-        for i in range(3, -1, -1):
+        for i in range(4, -1, -1):
             # upconv_0
             num_ch_in = self.num_ch_enc[-1] if i == 4 else self.num_ch_dec[i + 1]
             num_ch_out = self.num_ch_dec[i]
-            self.convs[("upconv", i, 0)] = ConvBlock(num_ch_in, num_ch_out)
+            self.convs[("upconv", i, 0)] = ConvBlock(num_ch_in, num_ch_out, norm_layer, nl_layer)
 
             # upconv_1
             num_ch_in = self.num_ch_dec[i]
-            if self.use_skips and i > 0:
-                num_ch_in += self.num_ch_enc[i - 1]
             num_ch_out = self.num_ch_dec[i]
-            self.convs[("upconv", i, 1)] = ConvBlock(num_ch_in, num_ch_out)
-
+            if i > 0:
+                self.convs[("upconv_s", i, 1)] = ConvBlock(num_ch_in + self.num_ch_enc[i - 1], num_ch_out, norm_layer, nl_layer)
+            self.convs[("upconv", i, 1)] = ConvBlock(num_ch_in, num_ch_out, norm_layer, nl_layer)
         for s in self.scales:
             self.convs[("dispconv", s)] = Conv3x3(self.num_ch_dec[s], self.num_output_channels)
 
@@ -58,22 +53,23 @@ class DepthDecoder(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, input_features):
-        self.outputs = {}
-        b = input_features[0].size(0)
+        self.outputs = []
 
-        input_features_recovered = []
-        for i in range(len(self.num_ch_enc)):
-            input_features_recovered.append(self.fc_modules[i](input_features[i]).view(b, self.num_ch_enc[i], 1, 1))
-        # decoder
-        x = input_features_recovered[-1]
-        for i in range(3, -1, -1):
+        if isinstance(input_features, list):
+            x = input_features[-1]
+            use_skips = True
+        else:
+            x = self.fc(input_features).view(input_features.size(0),self.num_ch_enc[-1],8,8)  # TODO qui fc invece che conv
+            use_skips = False
+
+        for i in range(4, -1, -1):
             x = self.convs[("upconv", i, 0)](x)
-            x = [upsample(x)]
-            if self.use_skips and i > 0:
-                x += [input_features_recovered[i - 1]]
-            x = torch.cat(x, 1)
-            x = self.convs[("upconv", i, 1)](x)
+            x = upsample(x, mode=self.upsample_mode)
+            if use_skips and i > 0:
+                x = [x, input_features[i - 1]]
+                x = torch.cat(x, 1)
+                x = self.convs[("upconv_s", i, 1)](x)
+            x = self.convs[("upconv", i, 1)](x)         # TODO qui ho messo fisso questo invece che in else
             if i in self.scales:
-                self.outputs[("disp", i)] = self.sigmoid(self.convs[("dispconv", i)](x))
-
-        return self.outputs
+                self.outputs += [self.convs[("dispconv", i)](x)]
+        return self.outputs                             # TODO qui considera che anche se escono 16-256 vengono downscalati a 8-128

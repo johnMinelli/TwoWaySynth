@@ -104,7 +104,7 @@ def compute_depth_metrics(depth_gt, depth_pred):
 
     depth_errors = _compute_depth_errors(depth_gt, depth_pred)
 
-    depth_metric_names = ["depth/abs_rel", "depth/sq_rel", "depth/rms", "depth/log_rms", "depth/a1", "depth/a2", "depth/a3"]
+    depth_metric_names = ["depth_abs_rel", "depth_sq_rel", "depth_rms", "depth_log_rms", "depth_a1", "depth_a2", "depth_a3"]
 
     metrics = {}
     for i, metric_name in enumerate(depth_metric_names):

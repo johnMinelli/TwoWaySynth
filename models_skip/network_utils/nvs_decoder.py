@@ -16,11 +16,11 @@ from models_skip.network_utils.networks import get_non_linearity, get_norm_layer
 
 
 class NvsDecoder(nn.Module):
-    def __init__(self, num_ch_enc, nz=200, scales=range(4), num_output_channels=3, dropout=False):
+    def __init__(self, num_ch_enc, nz=200, scales=range(4), num_output_channels=3, dropout=False, norm_layer_type='instance', nl_layer_type='lrelu', upsample_mode='bilinear'):
         super(NvsDecoder, self).__init__()
-        norm_layer = get_norm_layer(norm_type='instance')
-        nl_layer = get_non_linearity(layer_type='lrelu')
-        self.upsample_mode = 'bilinear'
+        norm_layer = get_norm_layer(norm_type=norm_layer_type)
+        nl_layer = get_non_linearity(layer_type=nl_layer_type)
+        self.upsample_mode = upsample_mode
 
         self.num_output_channels = num_output_channels
         self.scales = scales

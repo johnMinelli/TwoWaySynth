@@ -100,12 +100,13 @@ class ConvBlock(nn.Module):
         super(ConvBlock, self).__init__()
 
         self.conv = Conv3x3(in_channels, out_channels, use_refl)
-        self.norm = norm(out_channels)
+        self.norm = norm(out_channels) if norm is not None else None
         self.nonlin = nonlin()
 
     def forward(self, x):
         out = self.conv(x)
-        out = self.norm(out)
+        if self.norm is not None:
+            out = self.norm(out)
         out = self.nonlin(out)
         return out
 

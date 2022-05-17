@@ -72,15 +72,23 @@ def _compute_depth_errors(gt, pred):
 
     rmse_log = (torch.log(gt) - torch.log(pred)) ** 2
     rmse_log = torch.sqrt(rmse_log.mean())
-
+    # Relative absolute error (percent)
     abs_rel = torch.mean(torch.abs(gt - pred) / gt)
-
+    # Relative squared error (percent)
     sq_rel = torch.mean((gt - pred) ** 2 / gt)
 
-    return abs_rel, sq_rel, rmse, rmse_log, a1, a2, a3
+    err = torch.log(pred) - torch.log(gt)
+    # Scale invariant logarithmic error [log(m)*100]
+    silog = torch.sqrt(torch.mean(err ** 2) - torch.mean(err) ** 2) * 100
+    if torch.isnan(silog):
+        silog = torch.tensor(0)
+
+    log_10 = (torch.abs(torch.log10(gt) - torch.log10(pred))).mean()
+
+    return abs_rel, sq_rel, rmse, log_10, rmse_log, silog, a1, a2, a3
 
 
-def compute_depth_metrics(depth_gt, depth_pred):
+def compute_depth_metrics(depth_gt, depth_pred, min_depth=1e-3, max_depth=80):
     """Compute depth metrics, to allow monitoring during training
 
     This isn't particularly accurate as it averages over the entire batch,
@@ -89,8 +97,9 @@ def compute_depth_metrics(depth_gt, depth_pred):
     # depth_pred = torch.clamp(F.interpolate(depth_pred, [375, 1242], mode="bilinear", align_corners=False), 1e-3, 80)
     depth_pred = depth_pred.detach()
 
-    mask = depth_gt > 0
-
+    mask_1 = depth_gt > min_depth
+    mask_2 = depth_gt < max_depth
+    mask = torch.logical_and(mask_1, mask_2)
     # garg/eigen crop
     # crop_mask = torch.zeros_like(mask)
     # crop_mask[:, :, 153:371, 44:1197] = 1
@@ -104,7 +113,7 @@ def compute_depth_metrics(depth_gt, depth_pred):
 
     depth_errors = _compute_depth_errors(depth_gt, depth_pred)
 
-    depth_metric_names = ["depth_abs_rel", "depth_sq_rel", "depth_rms", "depth_log_rms", "depth_a1", "depth_a2", "depth_a3"]
+    depth_metric_names = ["depth_abs_rel", "depth_sq_rel", "depth_rms", "depth_log10", "depth_log_rms", "depth_silog", "depth_a1", "depth_a2", "depth_a3"]
 
     metrics = {}
     for i, metric_name in enumerate(depth_metric_names):

@@ -16,11 +16,11 @@ from models_skip.network_utils.networks import get_non_linearity, get_norm_layer
 
 
 class DepthDecoder(nn.Module):
-    def __init__(self, num_ch_enc, nz=200, scales=range(5), num_output_channels=1, dropout=False):
+    def __init__(self, num_ch_enc, nz=200, scales=range(5), num_output_channels=1, dropout=False, norm_layer_type='batch', nl_layer_type='lrelu', upsample_mode='bilinear'):
         super(DepthDecoder, self).__init__()
-        norm_layer = get_norm_layer(norm_type='batch')
-        nl_layer = get_non_linearity(layer_type='lrelu')
-        self.upsample_mode = 'bilinear'
+        norm_layer = get_norm_layer(norm_type=norm_layer_type)
+        nl_layer = get_non_linearity(layer_type=nl_layer_type)
+        self.upsample_mode = upsample_mode
 
         fc = [nn.Linear(nz, num_ch_enc[-1]*8*8)]
         if dropout: fc += [nn.Dropout(0.3)]

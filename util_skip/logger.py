@@ -1,7 +1,7 @@
 import progressbar
 import time
 import wandb
-last_step =0
+last_step = 0
 
 class Logger(object):
     global last_step

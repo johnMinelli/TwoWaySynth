@@ -29,7 +29,7 @@ class ResnetEncoder(nn.Module):
         if num_layers not in resnets:
             raise ValueError("{} is not a valid number of resnet layers".format(num_layers))
 
-        self.encoder = resnets[num_layers](pretrained).to(torch.device('cuda'))
+        self.encoder = resnets[num_layers](pretrained)
 
         if num_layers > 34:
             self.num_ch_enc[1:] *= 4
@@ -40,6 +40,7 @@ class ResnetEncoder(nn.Module):
 
     def to(self, device):
         self.fc.to(device)
+        self.encoder.to(device)
         super().to(device)
         return self
 

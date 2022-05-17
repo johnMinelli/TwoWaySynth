@@ -46,6 +46,9 @@ class TrainOptions(BaseOptions):
                             help='padding mode for image warping : this is important for photometric differenciation when going outside target image.'
                                  ' zeros will null gradients outside target image.'
                                  ' border will only null gradients of the coordinate outside (x or y)')
+        self.parser.add_argument('--upsample_mode', type=str, choices=['nearest', 'bilinear'], default='bilinear', help='to specify')
+        self.parser.add_argument('--norm_layer', type=str, choices=['batch', 'none'], default='batch', help='to specify')
+        self.parser.add_argument('--nl_layer', type=str, choices=['relu', 'lrelu', 'elu'], default='lrelu', help='to specify')
         self.isTrain = True
 
 

@@ -49,10 +49,11 @@ class ShapeNetDataset(data.Dataset):
 
             intrinsics = scenes_intrinsics[scene_id]
             poses = scenes_poses[scene_id]
-            # Make sample
-            for i in range(len(poses)-self.args.n_targets):  # TODO make this 2 random
-                sample = {'intrinsics': intrinsics, 'pose_ref': poses[i], 'pose_targets': [poses[i+1+j] for j in range(self.args.n_targets)],
-                          'ref': Path(scene_path/'%.2d' % i), 'targets': [Path(scene_path/'%.2d' % (i+1+j)) for j in range(self.args.n_targets)]}
+            # Make sample: the target is a list in case a future implementation wants to use multiple views
+            for i in range(len(poses)):
+                view_shift = i+np.random.randint(1, self.args.max_seq_distance+1)
+                sample = {'intrinsics': intrinsics, 'pose_ref': poses[i], 'pose_targets': [poses[(view_shift+j) % len(poses)] for j in range(self.args.n_targets)],
+                          'ref': Path(scene_path/'%.2d' % i), 'targets': [Path(scene_path/'%.2d' % ((view_shift+j) % len(poses))) for j in range(self.args.n_targets)]}
                 self.samples.append(sample)
 
         random.shuffle(self.samples)
@@ -72,8 +73,8 @@ class ShapeNetDataset(data.Dataset):
         B = self.load_image(id_target+".png") / 255. * 2 - 1
         # load depth [0,1] where 1 is the furthest
         if self.use_depth:
-            DA = 1-(self.load_depth_image((self.data_root/id_source)+"_sparse_depth.png") / 255.)
-            DB = 1-(self.load_depth_image((self.data_root/id_target)+"_sparse_depth.png") / 255.)
+            DA = self.depth_scale/(((self.load_depth_image((self.data_root/id_source)+"_sparse_depth.png") / 255.) * self.depth_scale)+1.e-17)
+            DB = self.depth_scale/(((self.load_depth_image((self.data_root/id_target)+"_sparse_depth.png") / 255.) * self.depth_scale)+1.e-17)
 
         # intrinsics
         I = sample_data["intrinsics"].astype(np.float32)

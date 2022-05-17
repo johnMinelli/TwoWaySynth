@@ -1,9 +1,12 @@
+import os
 from copy import deepcopy
 
 import pandas as pd
 import torch
 import torch.optim
 import torch.utils.data
+from torch.utils.data.dataset import random_split
+
 from datasets.dataset_loader import CreateDataset
 from models_skip.base_model import BaseModel
 from options.train_options import TrainOptions
@@ -28,6 +31,7 @@ def main():
 
     train_ds = CreateDataset(args, train=True)
     val_ds = CreateDataset(args, train=False)
+    # random_split(train_ds, [7, 3], generator=torch.Generator().manual_seed(42))
     print(f'{len(train_ds)} samples found in train split')
     print(f'{len(val_ds)} samples found in valid split')
 
@@ -52,14 +56,17 @@ def main():
         wandb.config = args
         wandb.log({"params": wandb.Table(data=pd.DataFrame({k: [v] for k, v in vars(args).items()}))})
     train_logger = Logger(mode="train", n_epochs=args.epochs, data_size=len(train_loader), terminal_print_freq=args.print_freq, display_freq=args.display_freq, tensorboard=tb_writer, visualizer=visualizer, wand=args.wandb)
-    valid_logger = Logger(mode="valid", n_epochs=args.epochs, data_size=len(val_loader), terminal_print_freq=-1,                display_freq=args.display_freq, tensorboard=tb_writer, visualizer=visualizer, wand=args.wandb)
+    valid_logger = Logger(mode="valid", n_epochs=args.epochs, data_size=len(val_loader), terminal_print_freq=-1, display_freq=args.display_freq, tensorboard=tb_writer, visualizer=visualizer, wand=args.wandb)
 
     for epoch in range(model.start_epoch, args.epochs):
+        if not model.nvs_mode and (model.start_epoch > 0 or (epoch > 0 and ((args.validate and valid_metrics[3] < 0.05) or (not args.validate and train_metrics[3] < 0.05)))):
+            model.nvs_mode = True
+
         # train for one epoch
         train_time, train_loss, train_metrics = run_model(train_loader, model, train_logger.epoch_start(epoch))
 
         # validate
-        if args.validate and epoch >= 5:
+        if args.validate:
             model.switch_mode('eval')
 
             with torch.no_grad():
@@ -72,11 +79,12 @@ def main():
             ref_metric = valid_metrics[0]
             if best_result < 0:
                 best_result = ref_metric
-            elif ref_metric > best_result:
+            elif ref_metric < best_result:
                 best_result = ref_metric
-                model.save(epoch, args.save_path)
+                model.save(epoch, os.path.join(args.save_path, args.name))
 
         train_logger.epoch_stop()
+        model.update_learning_rate()
     train_logger.progress_bar.finish()
 
 

@@ -117,7 +117,7 @@ class RandomCropNumpy(object):
             self.size = size
         self.random_state = random_state
     def __call__(self, imgs):
-        results  = []
+        results = []
         h,w = imgs[0].shape[:2]
         th, tw = self.size
         if w == tw and h == th:

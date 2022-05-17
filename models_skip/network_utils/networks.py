@@ -2,7 +2,7 @@ import functools
 import torch
 from torch.optim import lr_scheduler
 from torch import nn
-
+import torch.nn.functional as F
 
 class depthDecoder(nn.Module):
     def __init__(self, output_nc, nf=64, n_layers=8, n_bilinear_layers=6, nz=200, dropout=False):
@@ -166,19 +166,19 @@ class Decoder(nn.Module):
 
 
         pred1 = self.pred1(deconv5)
-        upred1 = nn.functional.upsample(pred1, scale_factor=2)
+        upred1 = F.interpolate(pred1, scale_factor=2)
 
         deconv6 = self.deconv6(torch.cat((deconv5, conv3), 1))
         iconv6 = torch.cat((deconv6, upred1, conv2), 1)
 
         pred2 = self.pred2(iconv6)
-        upred2 = nn.functional.upsample(pred2, scale_factor=2)
+        upred2 = F.interpolate(pred2, scale_factor=2)
 
         deconv7 = self.deconv7(iconv6)
         iconv7 = torch.cat((deconv7, upred2), 1)
 
         pred3 = self.pred3(iconv7)
-        upred3 = nn.functional.upsample(pred3, scale_factor=2)
+        upred3 = F.interpolate(pred3, scale_factor=2)
 
         deconv8 = self.deconv8(iconv7)
         iconv8 = torch.cat((deconv8, upred3), 1)

@@ -20,20 +20,16 @@ class Visualizer():
         self.saved = False
         if self.display_id > 0:
             import visdom
-            self.vis = visdom.Visdom(port=opt.display_port)
+            self.vis = visdom.Visdom(server="213.209.253.6", port=opt.display_port, env=time.ctime())
 
         if self.use_html:
-            self.web_dir = os.path.join(opt.save_path, 'web')
+            self.web_dir = os.path.join(opt.save_path, opt.name, 'web')
             self.img_dir = os.path.join(self.web_dir, 'images')
 
             self.anim_dir = os.path.join(self.web_dir, 'anim')
 
             print('create web directory %s...' % self.web_dir)
             util.mkdirs([self.web_dir, self.img_dir, self.anim_dir])
-        self.log_name = os.path.join(opt.save_path, 'loss_log.txt')
-        with open(self.log_name, "a") as log_file:
-            now = time.strftime("%c")
-            log_file.write('================ Training Loss (%s) ================\n' % now)
 
     def reset(self):
         self.saved = False

@@ -27,7 +27,11 @@ def photometric_reconstruction_loss(tgt_img, ref_img, intrinsics, depth_scales, 
         diff = ((tgt_img_scaled - ref_img_warped) * (1-valid_points.float()))
         # mask the background (black)
         reconstruction_loss = diff[tgt_img_scaled>0].abs().mean()
-
+        ### upsample depth not images
+        # b, _, h, w = tgt_img.size()
+        # ref_img_warped, _, valid_points = inverse_warp(ref_img, F.upsample(depth, (h, w), mode="bilinear", align_corners=False), pose, intrinsics)
+        # diff = ((tgt_img - ref_img_warped) * (1 - valid_points.float()))
+        # reconstruction_loss = diff[tgt_img > 0].abs().mean()
         return reconstruction_loss, ref_img_warped, diff
 
     warped_results, diff_results = [], []

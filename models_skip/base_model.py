@@ -61,7 +61,7 @@ class BaseModel():
         param_list = []
         for name, model in self.net_dict.items():
             if not self.isTrain or opt.continue_train is not None:
-                self.start_epoch = self.load_network(model, load_dir=self.backup_dir, epoch_label=opt.continue_train, network_label=name)
+                self.start_epoch = self.load_network(model, load_dir=self.backup_dir, epoch_label=opt.continue_train if self.isTrain else opt.model_epoch, network_label=name)
             else:
                 networks.init_weights(model, init_type=opt.init_type)
 
@@ -235,6 +235,7 @@ class BaseModel():
                             'depth_L1_real': F.l1_loss(self.depthskipped_b_warped[torch.logical_and(self.real_depth_B>0, self.real_depth_B<self.opt.max_depth)], self.real_depth_B[torch.logical_and(self.real_depth_B>0, self.real_depth_B<self.opt.max_depth)]).item(),
                             'depth_L1_direct': F.l1_loss(self.depthskipped_b_warped, self.depthskipped_b).item(),
                             **compute_depth_metrics(self.real_depth_B, self.depthskipped_b, max_depth=self.opt.max_depth)})
+    
 
     def get_current_anim(self):
         self.switch_mode('eval')

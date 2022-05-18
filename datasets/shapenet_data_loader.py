@@ -10,12 +10,14 @@ from datasets.transform_list import RandomCropNumpy, EnhancedCompose, RandomColo
 
 
 class ShapeNetDataset(data.Dataset):
-    def __init__(self, args, train=True):
+    def __init__(self, args, train, valid, eval):
         self.train = train
+        self.valid = valid
+        self.eval = eval
         self.args = args
 
         self.use_depth = args.depth is not None
-        self.depth_scale = 1.75
+        self.depth_scale = args.max_depth
         self.data_root = Path(args.data_path)
 
         self.transform = Transformer(args)
@@ -42,23 +44,36 @@ class ShapeNetDataset(data.Dataset):
             # with open(scene/'rendering_metadata.txt') as file:
             #     self.scenes_render[str(scene.name)] = json.loads("["+file.read().replace("\n", "")[:-2]+"]")
 
-        for scene_id in self.ids:
-            if not os.path.exists(self.data_root/scene_id): continue
-
-            scene_path = self.data_root/scene_id
-
-            intrinsics = scenes_intrinsics[scene_id]
-            poses = scenes_poses[scene_id]
-            # Make sample: the target is a list in case a future implementation wants to use multiple views
-            for i in range(len(poses)):
-                view_shift = i+np.random.randint(1, self.args.max_seq_distance+1)
-                sample = {'intrinsics': intrinsics, 'pose_ref': poses[i], 'pose_targets': [poses[(view_shift+j) % len(poses)] for j in range(self.args.n_targets)],
-                          'ref': Path(scene_path/'%.2d' % i), 'targets': [Path(scene_path/'%.2d' % ((view_shift+j) % len(poses))) for j in range(self.args.n_targets)]}
+        if self.eval:
+            self.pairs = self.ids
+            scene_id = None
+            for pair_ids in self.pairs:
+                id_s, id_t = pair_ids.split(" ")
+                if scene_id != id_s.split("/")[0]:
+                    scene_id = id_s.split("/")[0]
+                    scene_path = self.data_root / scene_id
+                    intrinsics = scenes_intrinsics[scene_id]
+                    poses = scenes_poses[scene_id]
+                sample = {'intrinsics': intrinsics, 'pose_ref': poses[int(Path(id_s).name)], 'pose_targets': [poses[int(Path(id_t).name)]],
+                          'ref': Path(self.data_root / id_s), 'targets': [Path(self.data_root / id_t)]}
                 self.samples.append(sample)
+        else:
+            for scene_id in self.ids:
+                if not os.path.exists(self.data_root/scene_id): continue
+
+                scene_path = self.data_root/scene_id
+
+                intrinsics = scenes_intrinsics[scene_id]
+                poses = scenes_poses[scene_id]
+                # Make sample: the target is a list in case a future implementation wants to use multiple views
+                for i in range(len(poses)):
+                    view_shift = i+np.random.randint(1, self.args.max_seq_distance+1)
+                    sample = {'intrinsics': intrinsics, 'pose_ref': poses[i], 'pose_targets': [poses[(view_shift+j) % len(poses)] for j in range(self.args.n_targets)],
+                              'ref': Path(scene_path/'%.2d' % i), 'targets': [Path(scene_path/'%.2d' % ((view_shift+j) % len(poses))) for j in range(self.args.n_targets)]}
+                    self.samples.append(sample)
 
         random.shuffle(self.samples)
         self.dataset_size = len(self.samples)
-        self.args.rot_range = 4
 
     def __getitem__(self, index):
         sample_data = self.samples[index]

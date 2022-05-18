@@ -11,7 +11,7 @@ class BaseOptions():
     def initialize(self):
         # basic info
         self.parser.add_argument('--seed', default=0, type=int, help='seed for random functions, and network initialization')
-        self.parser.add_argument('--batch_size', type=int, default=16, help='input batch size')
+        self.parser.add_argument('--batch_size', type=int, default=8, help='input batch size')
         self.parser.add_argument('--gpu_ids', type=str, default='0,1', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
         self.parser.add_argument('--name', type=str, default='experiment_name', help='name of the experiment. It decides where to store samples and models')
         self.parser.add_argument('--workers', default=2, type=int, help='# threads for loading data')
@@ -27,6 +27,16 @@ class BaseOptions():
         self.parser.add_argument("--dataset", type=str, default='kitti', choices=["kitti", "shapenet"])
         self.parser.add_argument("--dataset_format", type=str, default='kitti', choices=["kitti", "shapenet"])
 
+        # train and eval: models hyperparameters
+        # experiment related
+        self.parser.add_argument('--nz_geo', type=int, default=200, help='number of latent points')
+        self.parser.add_argument('--padding_mode', type=str, choices=['zeros', 'border'], default='border',
+                            help='padding mode for image warping : this is important for photometric differenciation when going outside target image.'
+                                 ' zeros will null gradients outside target image.'
+                                 ' border will only null gradients of the coordinate outside (x or y)')
+        self.parser.add_argument('--upsample_mode', type=str, choices=['nearest', 'bilinear'], default='bilinear', help='to specify')
+        self.parser.add_argument('--norm_layer', type=str, choices=['batch', 'none'], default='batch', help='to specify')
+        self.parser.add_argument('--nl_layer', type=str, choices=['relu', 'lrelu', 'elu'], default='lrelu', help='to specify')
         self.initialized = True
 
     def parse(self):

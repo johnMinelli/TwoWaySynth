@@ -7,7 +7,9 @@ class TrainOptions(BaseOptions):
         # input settings
         self.parser.add_argument("--train_file", type=str, required=True, help='file with the pairs of the train split')
         self.parser.add_argument("--test_file", type=str, required=True, help='file with the pairs of the test split')
-        self.parser.add_argument("--depth", type=str, default=None, choices=["", "sparse", "dense"], help="If available (e.g. with KITTI), will store depth ground truth along with images, for validation")
+        self.parser.add_argument("--depth", type=str, default=None, choices=["", "sparse", "dense"], help="If available (e.g. with KITTI), will use depth ground truth in validation")
+        self.parser.add_argument('--max_seq_distance', type=int, default=1,  help='[ShapeNet] pairs of images will be use created with a images at a maximum distanca of max_seq_distance.'
+                                                                                  'The higher the value, the more rotation will occur between the images.')
         # output settings
         self.parser.add_argument('--display_freq', type=int, default=1, help='frequency of showing training results on screen')
         self.parser.add_argument('--display_single_pane_ncols', type=int, default=0, help='if positive, display all images in a single visdom web panel with certain number of images per row.')
@@ -38,17 +40,6 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument('--lambda_smooth', type=float, default=10.0, help='scale for edge smoothness loss')
         self.parser.add_argument('--lambda_vgg', type=float, default=1.0, help='scale for vgg perceptual loss')
 
-        # experiment related
-        self.parser.add_argument('--nz_geo', type=int, default=200, help='number of latent points')
-        self.parser.add_argument('--max_seq_distance', type=int, default=1,  help='[ShapeNet] pairs of images will be use created with a images at a maximum distanca of max_seq_distance.'
-                                                                                  'The higher the value, the more rotation will occur between the images.')
-        self.parser.add_argument('--padding_mode', type=str, choices=['zeros', 'border'], default='border',
-                            help='padding mode for image warping : this is important for photometric differenciation when going outside target image.'
-                                 ' zeros will null gradients outside target image.'
-                                 ' border will only null gradients of the coordinate outside (x or y)')
-        self.parser.add_argument('--upsample_mode', type=str, choices=['nearest', 'bilinear'], default='bilinear', help='to specify')
-        self.parser.add_argument('--norm_layer', type=str, choices=['batch', 'none'], default='batch', help='to specify')
-        self.parser.add_argument('--nl_layer', type=str, choices=['relu', 'lrelu', 'elu'], default='lrelu', help='to specify')
         self.isTrain = True
 
 

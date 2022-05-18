@@ -30,7 +30,7 @@ def main():
         args.max_depth = 1.75
 
     train_ds = CreateDataset(args, train=True)
-    val_ds = CreateDataset(args, train=False)
+    val_ds = CreateDataset(args, valid=True)
     # random_split(train_ds, [7, 3], generator=torch.Generator().manual_seed(42))
     print(f'{len(train_ds)} samples found in train split')
     print(f'{len(val_ds)} samples found in valid split')

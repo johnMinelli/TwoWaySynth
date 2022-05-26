@@ -5,7 +5,6 @@ import pandas as pd
 import torch
 import torch.optim
 import torch.utils.data
-from torch.utils.data.dataset import random_split
 
 from datasets.dataset_loader import CreateDataset
 from models_skip.base_model import BaseModel
@@ -31,7 +30,7 @@ def main():
 
     train_ds = CreateDataset(args, train=True)
     val_ds = CreateDataset(args, valid=True)
-    # random_split(train_ds, [7, 3], generator=torch.Generator().manual_seed(42))
+
     print(f'{len(train_ds)} samples found in train split')
     print(f'{len(val_ds)} samples found in valid split')
 
@@ -59,7 +58,7 @@ def main():
     valid_logger = Logger(mode="valid", n_epochs=args.epochs, data_size=len(val_loader), terminal_print_freq=-1, display_freq=args.display_freq, tensorboard=tb_writer, visualizer=visualizer, wand=args.wandb)
 
     for epoch in range(model.start_epoch, args.epochs):
-        if not model.nvs_mode and (model.start_epoch > 0 or (epoch > 0 and ((args.validate and valid_metrics[3] < 0.05) or (not args.validate and train_metrics[3] < 0.05)))):
+        if not model.nvs_mode and (model.start_epoch > 0 or (epoch > 0 and ((args.validate and valid_metrics[3] < 0.055) or (not args.validate and train_metrics[3] < 0.055)))):
             model.nvs_mode = True
 
         # train for one epoch
@@ -75,7 +74,7 @@ def main():
             model.switch_mode('train')
 
             # choose the most relevant as measure of performance to determine the best model
-            # *note that some measures are to maximize (such as a1,a2,a3)*
+            # /* note that some measures are to maximize (e.g. a1,a2,a3) */
             ref_metric = valid_metrics[0]
             if best_result < 0:
                 best_result = ref_metric
@@ -86,6 +85,8 @@ def main():
         train_logger.epoch_stop()
         model.update_learning_rate()
     train_logger.progress_bar.finish()
+    # final save
+    model.save(args.epochs, os.path.join(args.save_path, args.name))
 
 
 def run_model(dataloader, model, logger):

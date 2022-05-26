@@ -5,6 +5,7 @@ class TrainOptions(BaseOptions):
     def initialize(self):
         BaseOptions.initialize(self)
         # input settings
+        self.parser.add_argument('--save_path', type=str, default='./models_ckp', help='models are saved here')
         self.parser.add_argument("--train_file", type=str, required=True, help='file with the pairs of the train split')
         self.parser.add_argument("--test_file", type=str, required=True, help='file with the pairs of the test split')
         self.parser.add_argument("--depth", type=str, default=None, choices=["", "sparse", "dense"], help="If available (e.g. with KITTI), will use depth ground truth in validation")
@@ -12,7 +13,6 @@ class TrainOptions(BaseOptions):
                                                                                   'The higher the value, the more rotation will occur between the images.')
         # output settings
         self.parser.add_argument('--display_freq', type=int, default=1, help='frequency of showing training results on screen')
-        self.parser.add_argument('--display_single_pane_ncols', type=int, default=0, help='if positive, display all images in a single visdom web panel with certain number of images per row.')
         self.parser.add_argument('--not_save_images', action='store_true', help='do not save intermediate training results to [opt.checkpoints_dir]/[opt.name]/web/')
         self.parser.add_argument('--print_freq', type=int, default=50, help='frequency of showing training results on console')
         self.parser.add_argument('--tensorboard', action='store_true', help='log stats on tensorboard local dashboard')
@@ -39,9 +39,6 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument('--lambda_depth', type=float, default=10.0, help='scale for depth consistency loss')
         self.parser.add_argument('--lambda_smooth', type=float, default=10.0, help='scale for edge smoothness loss')
         self.parser.add_argument('--lambda_vgg', type=float, default=1.0, help='scale for vgg perceptual loss')
+        self.parser.add_argument('--fast_train', action='store_true', help='initally train NVSDecoder with GT features untill valid_depth_L1_direct stays under a threshold')
 
         self.isTrain = True
-
-
-
-

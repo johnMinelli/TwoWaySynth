@@ -15,12 +15,12 @@ class BaseOptions():
         self.parser.add_argument('--gpu_ids', type=str, default='0,1', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
         self.parser.add_argument('--name', type=str, default='experiment_name', help='name of the experiment. It decides where to store samples and models')
         self.parser.add_argument('--workers', default=2, type=int, help='# threads for loading data')
-        self.parser.add_argument('--save_path', type=str, default='./models_ckp', help='models are saved here')
 
         # visualizer initialization settings
         self.parser.add_argument('--display_winsize', type=int, default=256,  help='display window size')
         self.parser.add_argument('--display_id', type=int, default=1, help='window id of the web display')
         self.parser.add_argument('--display_port', type=int, default=8097, help='visdom port of the web display')
+        self.parser.add_argument('--display_single_pane_ncols', type=int, default=0, help='if positive, display all images in a single visdom web panel with certain number of images per row.')
 
         # data loading related
         self.parser.add_argument('--data_path', type=str, required=True, help='path to dataset')

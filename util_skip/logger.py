@@ -114,10 +114,10 @@ class Logger(object):
             self.epoch = None
             return avg_time, avg_losses, avg_metrics
 
-    def display_results(self, step, images):
+    def display_results(self, step, images, save=False):
         if step % self.display_freq == 0:
             current_steps = self.total_steps + step
-            self.visualizer.display_current_results(images, current_steps, False)
+            self.visualizer.display_current_results(images, current_steps, save)
             if self.tensorboard is not None:
                 for name, image in images.items():
                     self.tensorboard.add_image('{} {}'.format(self.prefix, name), image, current_steps, dataformats='HWC')

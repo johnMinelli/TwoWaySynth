@@ -84,8 +84,8 @@ class ShapeNetDataset(data.Dataset):
         id_target = sample_data["targets"][0]
 
         # load images [-1,1]
-        A = (1-self.load_image(id_source+".png") / 255.) * 2 - 1
-        B = (1-self.load_image(id_target+".png") / 255.) * 2 - 1
+        A = self.load_image(id_source+".png") / 255. * 2 - 1
+        B = self.load_image(id_target+".png") / 255. * 2 - 1
         # load depth [0,1] where 1 is the furthest
         if self.use_depth:
             DA = self.depth_scale/(((self.load_depth_image((self.data_root/id_source)+"_sparse_depth.png") / 255.) * self.depth_scale)+1.e-17)

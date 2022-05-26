@@ -38,7 +38,7 @@ class ShapeNetRawLoader(object):
         self.split = split
         self.img_height = img_height
         self.img_width = img_width
-        self.shape_list = ['03001627', '03211117',]
+        self.shape_list = ['03001627', '02958343',]
         self.difficulty_folder = "easy"  # "hard"
         self.depth = depth
         self.get_pose = get_pose

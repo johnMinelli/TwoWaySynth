@@ -2,6 +2,7 @@ from __future__ import division
 
 import numpy as np
 import torch
+import torchvision
 from torch import nn
 import torch.nn.functional as F
 
@@ -46,6 +47,7 @@ def photometric_reconstruction_loss(tgt_img, ref_img, intrinsics, depth_scales, 
         diff_results.append(diff)
     return total_loss, warped_results, diff_results
 
+
 def get_depth_smoothness(depth, img):
     d_gradients_x = torch.abs(depth[:, :, :-1, :] - depth[:, :, 1:, :])
     d_gradients_y = torch.abs(depth[:, :, :, :-1] - depth[:, :, :, 1:])
@@ -63,7 +65,12 @@ def get_depth_smoothness(depth, img):
 
 
 def depth_loss(d_true, d_pred):
-
+    """
+    Ground truth depth loss
+    :param d_true: depth ground truth
+    :param d_pred: depth predicted
+    :return: loss value
+    """
     w1, w2, w3 = 1.0, 1.0, 0.1
 
     mask = [d_true>0]
@@ -80,3 +87,40 @@ def depth_loss(d_true, d_pred):
 
     return (w1 * l_ssim) + (w2 * torch.mean(l_edges)) + (w3 * torch.mean(l_depth))
 
+
+class VGGPerceptualLoss(torch.nn.Module):
+    # VGG loss, Cite from https://gist.github.com/alper111/8233cdb0414b4cb5853f2f730ab95a49
+
+    def __init__(self, resize=True):
+        super(VGGPerceptualLoss, self).__init__()
+        blocks = []
+        blocks.append(torchvision.models.vgg16(pretrained=True).features[:4].eval())
+        blocks.append(torchvision.models.vgg16(pretrained=True).features[4:9].eval())
+        blocks.append(torchvision.models.vgg16(pretrained=True).features[9:16].eval())
+        blocks.append(torchvision.models.vgg16(pretrained=True).features[16:23].eval())
+        for bl in blocks:
+            for p in bl:
+                p.requires_grad = False
+        self.blocks = torch.nn.ModuleList(blocks)
+        self.transform = torch.nn.functional.interpolate
+        self.mean = torch.nn.Parameter(torch.tensor([0.485, 0.456, 0.406]).view(1,3,1,1))
+        self.std = torch.nn.Parameter(torch.tensor([0.229, 0.224, 0.225]).view(1,3,1,1))
+        self.resize = resize
+
+    def forward(self, input, target):
+        if input.shape[1] != 3:
+            input = input.repeat(1, 3, 1, 1)
+            target = target.repeat(1, 3, 1, 1)
+        input = (input-self.mean) / self.std
+        target = (target-self.mean) / self.std
+        if self.resize:
+            input = self.transform(input, mode='bilinear', size=(224, 224), align_corners=False)
+            target = self.transform(target, mode='bilinear', size=(224, 224), align_corners=False)
+        loss = 0.0
+        x = input
+        y = target
+        for block in self.blocks:
+            x = block(x)
+            y = block(y)
+            loss += F.l1_loss(x, y)
+        return loss

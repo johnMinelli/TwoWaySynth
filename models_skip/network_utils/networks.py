@@ -192,7 +192,7 @@ class Decoder(nn.Module):
 
 
 
-def transform_code(z, nz, RT, object_centric=False):
+def transform_code(z, RT, object_centric=False):
     b = z.size(0)
 
     z_tf = z.view(b,-1,3).bmm(RT[:,:3,:3])

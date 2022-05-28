@@ -21,6 +21,8 @@ class BaseOptions():
         self.parser.add_argument('--display_id', type=int, default=1, help='window id of the web display')
         self.parser.add_argument('--display_port', type=int, default=8097, help='visdom port of the web display')
         self.parser.add_argument('--display_single_pane_ncols', type=int, default=0, help='if positive, display all images in a single visdom web panel with certain number of images per row.')
+        self.parser.add_argument('--save_path', type=str, default='./save', help='images and checkpoints are saved here')
+        self.parser.add_argument('--save_images', action='store_true', help='if specified, result images will be saved in save_path')
 
         # data loading related
         self.parser.add_argument('--data_path', type=str, required=True, help='path to dataset')

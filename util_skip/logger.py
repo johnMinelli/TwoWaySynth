@@ -51,7 +51,7 @@ class Logger(object):
         self.display_freq = display_freq
 
     def anim(self, vis):
-        self.visualizer.display_current_anim(vis, self.epoch)
+        self.visualizer.display_current_anim(vis, self.epoch, True)
 
     def log(self, text):
         self.writer.write(text)
@@ -107,6 +107,8 @@ class Logger(object):
                 global last_step
                 self._log_stats_to_dashboards(last_step, dict(zip(self.losses.names, avg_losses)))
                 self._log_stats_to_dashboards(last_step, dict(zip(self.metrics.names, avg_metrics)))
+            if self.visualizer is not None:
+                self.visualizer.reset()
 
             self.step_time.avg = None
             self.losses.avg = None

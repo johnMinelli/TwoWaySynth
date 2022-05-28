@@ -5,7 +5,6 @@ class TrainOptions(BaseOptions):
     def initialize(self):
         BaseOptions.initialize(self)
         # input settings
-        self.parser.add_argument('--save_path', type=str, default='./models_ckp', help='models are saved here')
         self.parser.add_argument("--train_file", type=str, required=True, help='file with the pairs of the train split')
         self.parser.add_argument("--test_file", type=str, required=True, help='file with the pairs of the test split')
         self.parser.add_argument("--depth", type=str, default=None, choices=["", "sparse", "dense"], help="If available (e.g. with KITTI), will use depth ground truth in validation")

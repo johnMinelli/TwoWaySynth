@@ -13,7 +13,7 @@ class Visualizer():
     def __init__(self, opt):
         # self.opt = opt
         self.display_id = opt.display_id
-        self.use_html = opt.isTrain and not opt.not_save_images
+        self.save = opt.save_imgaes
         self.win_size = opt.display_winsize
         self.name = opt.name
         self.opt = opt
@@ -22,7 +22,7 @@ class Visualizer():
             import visdom
             self.vis = visdom.Visdom(server="213.209.253.6", port=opt.display_port, env=time.ctime())
 
-        if self.use_html:
+        if self.save:
             self.web_dir = os.path.join(opt.save_path, opt.name, 'web')
             self.img_dir = os.path.join(self.web_dir, 'images')
 
@@ -35,7 +35,7 @@ class Visualizer():
         self.saved = False
 
     # |visuals|: dictionary of images to display or save
-    def display_current_results(self, visuals, epoch, save_result=True):
+    def display_current_results(self, visuals, epoch, save_result=False):
         if self.display_id > 0:  # show images in the browser
             ncols = self.opt.display_single_pane_ncols
             if ncols > 0:
@@ -77,7 +77,7 @@ class Visualizer():
                                    win=self.display_id + idx)
                     idx += 1
 
-        if self.use_html and (save_result and not self.saved):  # save images to a html file
+        if self.save and (save_result and not self.saved):  # save images to a html file
             self.saved = True
             for label, image_numpy in visuals.items():
                 img_path = os.path.join(self.img_dir, 'epoch%.3d_%s.png' % (epoch, label))
@@ -104,9 +104,9 @@ class Visualizer():
 
             webpage.save()
 
-    def display_current_anim(self, visuals, epoch, save_result=True):
+    def display_current_anim(self, visuals, epoch, save_result=False):
         # self.vis.video(np.array(visuals.values()), opts=dict(fps=10))
-        if self.use_html and (save_result or not self.saved):  # save images to a html file
+        if self.save and (save_result or not self.saved):  # save images to a html file
             self.saved = True
             for key, anim in visuals.items():
                 imageio.mimsave(os.path.join(self.anim_dir, 'epoch%.3d_%s.gif' % (epoch,key)), np.array(anim))

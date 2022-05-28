@@ -105,7 +105,7 @@ class BaseModel():
 
     def set_input(self, input):
         self.real_A = Variable(input['A'].to(self.device))
-        self.real_depth_A = Variable(input['DA'].to(self.device))
+        # self.real_depth_A = Variable(input['DA'].to(self.device))
         self.real_B = Variable(input['B'].to(self.device))
         self.real_depth_B = Variable(input['DB'].to(self.device))
         self.real_RT = Variable(input['RT'].squeeze().to(self.device))
@@ -140,7 +140,7 @@ class BaseModel():
         return self.enc(image_tensor)
 
     def transform(self, z, RT):
-        return networks.transform_code(z, self.opt.nz_geo, RT.inverse(), object_centric=self.opt.dataset in ['shapenet'])
+        return networks.transform_code(z, RT.inverse(), object_centric=self.opt.dataset in ['shapenet'])
 
     def decode(self, z, z_features):
         output = self.dec(z, z_features)

@@ -28,7 +28,7 @@ def main():
         eval_ds, batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
-    visualizer =  Visualizer(args)
+    visualizer = Visualizer(args)
     metrics = AverageMeter(precision=4)
 
     model = BaseModel(args)
@@ -43,7 +43,7 @@ def main():
 
         metrics.update(list(model.get_current_metrics().items()), current_batch_size)
         visualizer.display_current_results(model.get_current_visuals(), i, True)
-
+        visualizer.reset()
     avg_metrics = metrics.avg
     print(' * Avg Metrics : ' + ', '.join(["{}: {:.3f}".format(n, v) for n, v in zip(metrics.names, avg_metrics)]))
 

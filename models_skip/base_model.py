@@ -108,7 +108,7 @@ class BaseModel():
         # self.real_depth_A = Variable(input['DA'].to(self.device))
         self.real_B = Variable(input['B'].to(self.device))
         self.real_depth_B = Variable(input['DB'].to(self.device))
-        self.real_RT = Variable(input['RT'].squeeze().to(self.device))
+        self.real_RT = Variable(input['RT'].to(self.device))
         self.intrinsics = input['I'][:,:,:3].to(self.device)
         # self.scale_factor = input['S'].numpy()
         self.batch_size = self.real_A.size(0)

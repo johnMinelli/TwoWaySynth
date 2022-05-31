@@ -13,7 +13,7 @@ class Visualizer():
     def __init__(self, opt):
         # self.opt = opt
         self.display_id = opt.display_id
-        self.save = opt.save_imgaes
+        self.save = opt.save_images
         self.win_size = opt.display_winsize
         self.name = opt.name
         self.opt = opt

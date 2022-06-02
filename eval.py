@@ -42,8 +42,8 @@ def main():
         metrics.update(list(model.get_current_metrics().items()), current_batch_size)
 
         # to save images
-        visualizer.display_current_results(model.get_current_visuals(), i,  list(model.get_current_metrics().items())[1][1]>0.98)
-        visualizer.reset()
+        # visualizer.display_current_results(model.get_current_visuals(), i,  list(model.get_current_metrics().items())[1][1]>0.98)
+        # visualizer.reset()
     avg_metrics = metrics.avg
     print(' * Avg Metrics : ' + ', '.join(["{}: {:.3f}".format(n, v) for n, v in zip(metrics.names, avg_metrics)]))
 

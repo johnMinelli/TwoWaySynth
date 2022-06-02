@@ -1,6 +1,4 @@
-import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 from math import exp
@@ -118,4 +116,4 @@ def compute_depth_metrics(depth_gt, depth_pred, min_depth=1e-3, max_depth=80):
     metrics = {}
     for i, metric_name in enumerate(depth_metric_names):
         metrics[metric_name] = depth_errors[i].item()
-    return metrics  # TODO secondo me va diviso per il batch_size
+    return metrics

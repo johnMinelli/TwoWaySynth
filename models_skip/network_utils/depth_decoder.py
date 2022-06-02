@@ -1,16 +1,11 @@
-# Copyright Niantic 2019. Patent Pending. All rights reserved.
-#
-# This software is licensed under the terms of the Monodepth2 licence
-# which allows for non-commercial use only, the full terms of which are made
-# available in the LICENSE file.
+# Decoder class Copyright Niantic 2019. Patent Pending. All rights reserved. https://github.com/nianticlabs/monodepth2
 
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
 import torch
-import torch.nn as nn
-
 from collections import OrderedDict
+
 from models_skip.network_utils.layers import *
 from models_skip.network_utils.networks import get_non_linearity, get_norm_layer
 
@@ -59,7 +54,7 @@ class DepthDecoder(nn.Module):
             x = input_features[-1]
             use_skips = True
         else:
-            x = self.fc(input_features).view(input_features.size(0),self.num_ch_enc[-1],8,8)  # TODO qui fc invece che conv
+            x = self.fc(input_features).view(input_features.size(0),self.num_ch_enc[-1],8,8)  # MOD here insteaa of conclutional blocks to upsample there is a FC
             use_skips = False
 
         for i in range(4, -1, -1):
@@ -69,7 +64,7 @@ class DepthDecoder(nn.Module):
                 x = [x, input_features[i - 1]]
                 x = torch.cat(x, 1)
                 x = self.convs[("upconv_s", i, 1)](x)
-            x = self.convs[("upconv", i, 1)](x)         # TODO qui ho messo fisso questo invece che in else
+            x = self.convs[("upconv", i, 1)](x)         # MOD this is fixed instead in an else branch
             if i in self.scales:
                 self.outputs += [self.convs[("dispconv", i)](x)]
-        return self.outputs                             # TODO qui considera che anche se escono 16-256 vengono downscalati a 8-128
+        return self.outputs                             # MOD here consider that even if fetures returned have dim in range [16-256] they were downscaled to [8-128]

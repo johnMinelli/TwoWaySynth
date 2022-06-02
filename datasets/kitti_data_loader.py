@@ -211,3 +211,51 @@ class Transformer(object):
             return self.train_transform(images)
         else:
             return self.test_transform(images)
+
+
+def pose_vec2mat(translation, rototranslation, rotation, scale=1):
+    """
+    Convert 6DoF parameters to transformation matrix.
+    Args:s
+        vec: 6DoF parameters in the order of tx, ty, tz, rx, ry, rz -- [B, 6]
+    Returns:
+        A transformation matrix -- [3, 4]
+    """
+    # translation
+    transvec = np.expand_dims(translation, -1)  # [3, 1]
+
+    # rototranslation
+    azimuth, elevation, radius = rototranslation
+    sRadians = np.deg2rad(azimuth)
+    tRadians = np.deg2rad(elevation)
+    x = radius * scale * np.cos(sRadians) * np.sin(tRadians)
+    y = radius * scale * np.sin(sRadians) * np.sin(tRadians)
+    z = radius * scale * np.cos(tRadians)
+    rototvec = np.array([x, y, z]).reshape((3, 1))  # [3, 1]
+
+    sumtransvec = transvec+rototvec  # [3, 1]
+
+    # rotation
+    x, y, z = scale*np.deg2rad(rotation[0]), scale*np.deg2rad(rotation[1]), scale*np.deg2rad(rotation[2])
+
+    cosz = np.cos(z)
+    sinz = np.sin(z)
+
+    zeros = z * 0
+    ones = zeros + 1
+    zmat = np.stack([cosz, -sinz, zeros, sinz, cosz, zeros, zeros, zeros, ones], axis=0).reshape(3, 3)
+
+    cosy = np.cos(y)
+    siny = np.sin(y)
+
+    ymat = np.stack([cosy, zeros, siny, zeros, ones, zeros, -siny, zeros, cosy], axis=0).reshape(3, 3)
+
+    cosx = np.cos(x)
+    sinx = np.sin(x)
+
+    xmat = np.stack([ones, zeros, zeros, zeros, cosx, -sinx, zeros, sinx, cosx], axis=0).reshape(3, 3)
+
+    rot_mat = xmat @ ymat @ zmat  # [B, 3, 3]
+    sumtransvec= -rot_mat.dot(transvec) + transvec
+    transform_mat = np.concatenate([rot_mat, sumtransvec], axis=1)  # [ 3, 4]
+    return transform_mat

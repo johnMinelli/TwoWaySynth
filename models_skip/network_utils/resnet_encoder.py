@@ -1,14 +1,8 @@
-# Copyright Niantic 2019. Patent Pending. All rights reserved.
-#
-# This software is licensed under the terms of the Monodepth2 licence
-# which allows for non-commercial use only, the full terms of which are made
-# available in the LICENSE file.
+# Encoder class Copyright Niantic 2019. Patent Pending. All rights reserved. https://github.com/nianticlabs/monodepth2
 
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
-
-import torch
 import torch.nn as nn
 import torchvision.models as models
 
@@ -55,5 +49,4 @@ class ResnetEncoder(nn.Module):
         self.features.append(self.encoder.layer4(self.features[-1]))
 
         return self.fc(self.features[-1].view(input_image.size(0),-1)), self.features
-    
-    # TODO qui ho tolto il maxpool di resnet
+        # MOD here FC instead of MaxPool: I don't want to classify, the details must be maintained.

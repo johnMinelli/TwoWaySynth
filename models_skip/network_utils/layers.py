@@ -1,23 +1,15 @@
-# Copyright Niantic 2019. Patent Pending. All rights reserved.
-#
-# This software is licensed under the terms of the Monodepth2 licence
-# which allows for non-commercial use only, the full terms of which are made
-# available in the LICENSE file.
+# Layers utils Copyright Niantic 2019. Patent Pending. All rights reserved. https://github.com/nianticlabs/monodepth2
 
 from __future__ import absolute_import, division, print_function
 
 import functools
-
-import numpy as np
-
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import lr_scheduler
 
 
 class ConvBlock(nn.Module):
-    """Layer to perform a convolution followed by ELU
+    """Layer to perform a convolution followed by norm layer and non-linear activation function.
     """
     def __init__(self, in_channels, out_channels, norm, nonlin=nn.ELU, use_refl=True):
         super(ConvBlock, self).__init__()

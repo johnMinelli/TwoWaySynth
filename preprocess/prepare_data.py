@@ -1,10 +1,6 @@
-import argparse
-from shutil import copyfile
-
 import imageio
 import numpy as np
 from pebble import ProcessPool
-import sys
 from tqdm import tqdm
 from path import Path
 
@@ -88,25 +84,6 @@ def main():
             except KeyboardInterrupt as e:
                 tasks.cancel()
                 raise e
-
-    # print('Generating train val lists')  # TODO remove
-    # np.random.seed(8964)
-    # # to avoid data snooping, we will make two cameras of the same scene to fall in the same set, train or val
-    # subdirs = args.dump_root.dirs()
-    # canonic_prefixes = set([subdir.basename()[:-2] for subdir in subdirs])
-    # with open(args.dump_root / 'train.txt', 'w') as tf:
-    #     with open(args.dump_root / 'val.txt', 'w') as vf:
-    #         for pr in tqdm(canonic_prefixes):
-    #             corresponding_dirs = args.dump_root.dirs('{}*'.format(pr))
-    #             if np.random.random() < 0.1:
-    #                 for s in corresponding_dirs:
-    #                     vf.write('{}\n'.format(s.name))
-    #             else:
-    #                 for s in corresponding_dirs:
-    #                     tf.write('{}\n'.format(s.name))
-    #                     if args.with_depth and args.no_train_gt:
-    #                         for gt_file in s.files('*.npy'):
-    #                             gt_file.remove_p()
 
 
 if __name__ == '__main__':

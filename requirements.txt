@@ -1,0 +1,16 @@
+torch >= 1.8.1
+torchvision >= 0.9.1
+pandas
+matplotlib
+scipy
+scikit-image
+imageio
+argparse
+wandb
+tensorboardX
+dominate
+progressbar2
+termcolor
+path
+tqdm
+pebble

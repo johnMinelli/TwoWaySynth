@@ -100,8 +100,6 @@ class Visualizer():
                         links.append(img_path)
                     webpage.add_images(ims, txts, links, width=self.win_size)
 
-
-
             webpage.save()
 
     def display_current_anim(self, visuals, epoch, save_result=False):

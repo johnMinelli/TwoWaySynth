@@ -4,9 +4,10 @@ from __future__ import absolute_import, division, print_function
 
 from collections import OrderedDict
 
+import numpy as np
 import torch
-from models_skip.network_utils.layers import *
-from models_skip.network_utils.networks import get_non_linearity, get_norm_layer
+from model.network_utils.layers import *
+from model.network_utils.networks import get_non_linearity, get_norm_layer
 
 
 class NvsDecoder(nn.Module):

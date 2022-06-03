@@ -12,7 +12,6 @@ class TrainOptions(BaseOptions):
                                                                                   'The higher the value, the more rotation will occur between the images.')
         # output settings
         self.parser.add_argument('--display_freq', type=int, default=1, help='frequency of showing training results on screen')
-        self.parser.add_argument('--not_save_images', action='store_true', help='do not save intermediate training results to [opt.checkpoints_dir]/[opt.name]/web/')
         self.parser.add_argument('--print_freq', type=int, default=50, help='frequency of showing training results on console')
         self.parser.add_argument('--tensorboard', action='store_true', help='log stats on tensorboard local dashboard')
         self.parser.add_argument('--wandb', action='store_true', help='log stats on wandb dashboard')

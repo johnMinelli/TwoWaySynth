@@ -5,17 +5,17 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch
 
-from models_skip.network_utils.depth_decoder import DepthDecoder
-from models_skip.network_utils.layers import get_scheduler
-from models_skip.network_utils.losses import depth_loss, get_depth_smoothness, photometric_reconstruction_loss, \
+from model.network_utils.depth_decoder import DepthDecoder
+from model.network_utils.layers import get_scheduler
+from model.network_utils.losses import depth_loss, get_depth_smoothness, photometric_reconstruction_loss, \
     VGGPerceptualLoss
-from models_skip.network_utils.metrics import compute_depth_metrics
-from models_skip.network_utils.nvs_decoder import NvsDecoder
-from models_skip.network_utils.projection_layer import inverse_warp
-from models_skip.network_utils import networks
-from models_skip.network_utils.metrics import ssim
-from models_skip.network_utils.projection_utils import get_RT, scale_K
-from models_skip.network_utils.resnet_encoder import ResnetEncoder
+from model.network_utils.metrics import compute_depth_metrics
+from model.network_utils.nvs_decoder import NvsDecoder
+from model.network_utils.projection_layer import inverse_warp
+from model.network_utils import networks
+from model.network_utils.metrics import ssim
+from model.network_utils.projection_utils import get_RT, scale_K
+from model.network_utils.resnet_encoder import ResnetEncoder
 from util_skip.util import tensor2im
 from collections import OrderedDict
 import numpy as np

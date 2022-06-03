@@ -42,7 +42,7 @@ python3 train.py --name shapenet --dataset shapenet --shuffle_batches --validate
 ```
 Additionally you can visualize metrics on Weight and Bias adding `--wandb` or setup tensorboard `--tensorbaord` and starting it
 ```bash
-tensorboard --logdir=checkpoints/
+tensorboard --logdir=save/
 ```
 and visualize the training progress by opening [https://localhost:8097](https://localhost:8097) on your browser starting the visdom server locally
 ```bash
@@ -51,8 +51,11 @@ visdom
 You can customize visualization with  `--display_freq 1 --display_port 8097`
 
 ## Evaluation
-
-
+Use a pretrained model to run the evaluation on images pairs 
+```bash
+python3 eval.py --name shapenet --dataset shapenet --save_images --save_path ./save --models_path ./save/shapenet --data_path $DATA$/datasets/ShapeNet_formatted --test_file ./datasets/shapenet_chair_split/eval_pairs_40.txt --model_epoch 30
+```
 ## Pretrained Models
 
-[//]: # ([Avalaible here]&#40;https://drive.google.com/drive/folders/1H1AFqSS8wr_YzwG2xWwAQHTfXN5Moxmx&#41;)
+[//]: # ([Chairs]&#40;https://drive.google.com/drive/folders/&#41;)
+[//]: # ([Cars]&#40;https://drive.google.com/drive/folders/&#41;)

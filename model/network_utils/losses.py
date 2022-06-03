@@ -6,8 +6,8 @@ import torchvision
 from torch import nn
 import torch.nn.functional as F
 
-from models_skip.network_utils.metrics import ssim
-from models_skip.network_utils.projection_layer import inverse_warp
+from model.network_utils.metrics import ssim
+from model.network_utils.projection_layer import inverse_warp
 
 
 # Depth loss took and adapted from SfMLearner - "Unsupervised Learning of Depth and Ego-Motion from Video"

@@ -3,7 +3,7 @@ import torch.optim
 import torch.utils.data
 
 from datasets.dataset_loader import CreateDataset
-from models_skip.base_model import BaseModel
+from model.base_model import BaseModel
 from options.eval_options import EvalOptions
 from util_skip.logger import AverageMeter
 from util_skip.util import fix_random

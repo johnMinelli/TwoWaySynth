@@ -7,7 +7,7 @@ import torch.optim
 import torch.utils.data
 
 from datasets.dataset_loader import CreateDataset
-from models_skip.base_model import BaseModel
+from model.base_model import BaseModel
 from options.train_options import TrainOptions
 from util_skip.logger import Logger
 from util_skip.util import fix_random

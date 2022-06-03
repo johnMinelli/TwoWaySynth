@@ -73,7 +73,7 @@ def main():
 
             model.switch_mode('train')
 
-            # choose the most relevant as measure of performance to determine the best model
+            # choose the most relevant as measure of performance to determine the best model: NVS_L1 is used
             # /* note that some measures are to maximize (e.g. a1,a2,a3) */
             ref_metric = valid_metrics[0]
             if best_result < 0:
@@ -106,10 +106,9 @@ def run_model(dataloader, model, logger):
 
         logger.display_results(i, model.get_current_visuals())
 
-        if i%4==0:
-            model.optimize_parameters()
-        if i % 2 == 0:
-         logger.epoch_step(i, current_batch_size=current_batch_size, errors=model.get_current_errors(), metrics=model.get_current_metrics())
+        model.optimize_parameters()
+
+        logger.epoch_step(i, current_batch_size=current_batch_size, errors=model.get_current_errors(), metrics=model.get_current_metrics())
 
     # logger.anim(model.get_current_anim())
     avg_time, avg_loss, avg_metrics = logger.epoch_stop()

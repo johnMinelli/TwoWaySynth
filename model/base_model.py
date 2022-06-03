@@ -6,17 +6,16 @@ import torch.nn.functional as F
 import torch
 
 from model.network_utils.depth_decoder import DepthDecoder
-from model.network_utils.layers import get_scheduler
+from model.network_utils.util import get_scheduler, print_network, init_weights
 from model.network_utils.losses import depth_loss, get_depth_smoothness, photometric_reconstruction_loss, \
     VGGPerceptualLoss
 from model.network_utils.metrics import compute_depth_metrics
 from model.network_utils.nvs_decoder import NvsDecoder
-from model.network_utils.projection_layer import inverse_warp
-from model.network_utils import networks
+from model.network_utils.projection_layer import inverse_warp, transform_code
 from model.network_utils.metrics import ssim
 from model.network_utils.projection_utils import get_RT, scale_K
 from model.network_utils.resnet_encoder import ResnetEncoder
-from util_skip.util import tensor2im
+from model.network_utils.util import tensor2im
 from collections import OrderedDict
 import numpy as np
 import itertools
@@ -26,7 +25,7 @@ import os
 
 class BaseModel():
     def name(self):
-        return 'BaseSkipModel'
+        return 'TwoWaySynthModel'
 
     def __init__(self, opt):
         self.opt = opt
@@ -64,14 +63,14 @@ class BaseModel():
                 else:
                     self.start_epoch = self._load_network(model, load_dir=opt.models_path, epoch_label=opt.model_epoch, network_label=name)
             else:
-                networks.init_weights(model, init_type=opt.init_type)
+                init_weights(model, init_type=opt.init_type)
 
             if self.isTrain:
                 model.train()
                 param_list.append(model.parameters())
             else:
                 model.eval()
-            networks.print_network(model)
+            print_network(model)
 
         if self.isTrain:
             # train parameters
@@ -101,7 +100,6 @@ class BaseModel():
             #      0, 280, 128, \
             #      0, 0, 1]).reshape((3, 3))
             # self.intrinsics = torch.tensor(intrinsics).float().to(self.device).unsqueeze(0)
-
 
     def set_input(self, input):
         self.real_A = Variable(input['A'].to(self.device))
@@ -140,7 +138,7 @@ class BaseModel():
         return self.enc(image_tensor)
 
     def transform(self, z, RT):
-        return networks.transform_code(z, RT.inverse(), object_centric=self.opt.dataset in ['shapenet'])
+        return transform_code(z, RT.inverse(), object_centric=self.opt.dataset in ['shapenet'])
 
     def decode(self, z, z_features):
         output = self.dec(z, z_features)
@@ -268,6 +266,10 @@ class BaseModel():
         for name, model in self.net_dict.items():
             if mode == 'eval': model.eval()
             if mode == 'train': model.train()
+
+    def print(self):
+        for _, model in self.net_dict.items():
+            print_network(model)
 
     def save(self, epoch, save_dir=None):
         for name, model in self.net_dict.items():

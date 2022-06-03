@@ -3,11 +3,11 @@ import torch.optim
 import torch.utils.data
 
 from datasets.dataset_loader import CreateDataset
+from logger.logger import AverageMeter
+from logger.visualizer import Visualizer
 from model.base_model import BaseModel
+from model.network_utils.util import fix_random
 from options.eval_options import EvalOptions
-from util_skip.logger import AverageMeter
-from util_skip.util import fix_random
-from util_skip.visualizer import Visualizer
 
 
 def main():

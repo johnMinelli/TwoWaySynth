@@ -7,7 +7,6 @@ import torch
 from collections import OrderedDict
 
 from model.network_utils.layers import *
-from model.network_utils.networks import get_non_linearity, get_norm_layer
 
 
 class DepthDecoder(nn.Module):

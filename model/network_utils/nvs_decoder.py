@@ -7,7 +7,6 @@ from collections import OrderedDict
 import numpy as np
 import torch
 from model.network_utils.layers import *
-from model.network_utils.networks import get_non_linearity, get_norm_layer
 
 
 class NvsDecoder(nn.Module):

@@ -109,3 +109,13 @@ def inverse_warp(img, depth, pose_mat, intrinsics, padding_mode='border'):
     projected_img = F.grid_sample(img, src_pixel_coords, padding_mode=padding_mode, align_corners=True)
 
     return projected_img, src_pixel_coords, mask
+
+
+def transform_code(z, RT, object_centric=False):
+    b = z.size(0)
+
+    z_tf = z.view(b,-1,3).bmm(RT[:,:3,:3])
+    nz = z_tf.size(1)
+    if not object_centric:
+        z_tf = z_tf + RT[:,:3,3].unsqueeze(1).expand((-1,nz,3))
+    return z_tf.view(-1, nz * 3)

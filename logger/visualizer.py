@@ -2,9 +2,9 @@ import numpy as np
 import os
 import ntpath
 import time
-from . import util
 from . import html
 #from scipy.misc import imresize
+from model.network_utils import util
 from PIL import Image
 from termcolor import colored
 import imageio

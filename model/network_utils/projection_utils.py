@@ -1,5 +1,5 @@
 import numpy as np
-from util_skip.util import tensor2im
+from model.network_utils.util import tensor2im
 from skimage.transform import warp
 import torch
 

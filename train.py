@@ -9,9 +9,9 @@ import torch.utils.data
 from datasets.dataset_loader import CreateDataset
 from model.base_model import BaseModel
 from options.train_options import TrainOptions
-from util_skip.logger import Logger
-from util_skip.util import fix_random
-from util_skip.visualizer import Visualizer
+from logger.logger import Logger
+from logger.visualizer import Visualizer
+from model.network_utils.util import fix_random
 from tensorboardX import SummaryWriter
 import wandb
 

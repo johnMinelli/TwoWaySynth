@@ -75,7 +75,7 @@ class BaseModel():
         if self.isTrain:
             # train parameters
             self.backup_dir = os.path.join(opt.save_path, opt.name)
-            self.nvs_mode = opt.fast_train
+            self.nvs_mode = not opt.fast_train
             # initialize optimizers
             self.schedulers, self.optimizers = [], []
             self.optimizer_G = torch.optim.Adam(itertools.chain(*param_list), lr=opt.lr, betas=(opt.momentum, opt.beta), weight_decay=opt.weight_decay)
@@ -115,20 +115,20 @@ class BaseModel():
         self.z_a, self.z_features_a = self.encode(self.real_A)  # [b,nz*3] [high to low features]
         self.z_b, self.z_features_b = self.encode(self.real_B)  # for loss
         self.depthunskipped_b, _ = self.depthdecode(self.z_b)  # for loss
-        self.depthskipped_b, self.depth_scales_b = self.depthdecode(self.z_features_b)  # for loss
+        self.depthskipped_b, self.depth_scales_b = self.depthdecode(self.z_b, self.z_features_b[:-1])  # for loss
 
         self.z_a2b = self.transform(self.z_a, self.real_RT)  # [b,nz*3]
         # get depth from latent no_skip
         self.depthunskipped_a2b, self.depth_scales_a2b = self.depthdecode(self.z_a2b)  # [low to high features]
-        self.depthskipped_a, _ = self.depthdecode(self.z_features_a)  # for loss
+        self.depthskipped_a, _ = self.depthdecode(self.z_a, self.z_features_a[:-1])  # for loss
 
         # warp 'z_features_a' with 'depth_scales_a2b' for depth skip connections
         self.z_features_warped = self.warp_features(self.z_features_a, self.depth_scales_a2b[::-1], intrinsics_ratios=[0.5, 0.25, 0.125, 0.0625, 0.03125])
-        self.depthskipped_b_warped, self.depth_scales_b_skip_warped = self.depthdecode(self.z_features_warped)
+        self.depthskipped_b_warped, self.depth_scales_b_skip_warped = self.depthdecode(self.z_a2b, self.z_features_warped[:-1])
 
         # again warp 'z_features_a' with better 'depth_scales_a2b' for nvs skip connections
         self.z_features_skip_warped = self.warp_features(self.z_features_a, self.depth_scales_b_skip_warped[::-1], intrinsics_ratios=[0.5, 0.25, 0.125, 0.0625, 0.03125])
-        self.fake_B3, self.fake_B2, self.fake_B1, self.fake_B = self.decode(self.z_a2b, self.z_features_skip_warped[:-1] if not self.train_mode or self.nvs_mode else self.z_features_b)
+        self.fake_B3, self.fake_B2, self.fake_B1, self.fake_B = self.decode(self.z_a2b, self.z_features_skip_warped[:-1] if not self.train_mode or self.nvs_mode else self.z_features_b[:-1])
         # self.fake_direct_B3, self.fake_direct_B2, self.fake_direct_B1, self.fake_direct_B = self.decode(self.z_b, self.z_features_b)  # for loss
 
     def warp_features(self, z_features, depth_scales, intrinsics_ratios):
@@ -144,8 +144,8 @@ class BaseModel():
         output = self.dec(z, z_features)
         return [torch.tanh(out) for out in output]
 
-    def depthdecode(self, z):
-        outputs = self.depthdec(z)
+    def depthdecode(self, z, z_features=None):
+        outputs = self.depthdec(z, z_features)
         if self.opt.dataset in ['kitti']:
             return [1 / (10 * torch.sigmoid(output_scale) + 0.01) for output_scale in outputs]  # predict disparity instead of depth for natural scenes
         elif self.opt.dataset in ['shapenet']:

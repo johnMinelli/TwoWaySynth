@@ -25,6 +25,7 @@ class DepthDecoder(nn.Module):
         self.scales = scales
         self.num_ch_enc = num_ch_enc
         self.num_ch_dec = np.array([16, 32, 64, 128, 256])
+        self.final_dim = np.exp2(np.log2(self.num_ch_enc.max())-np.log2(self.num_ch_enc.min())).astype(np.int)
 
         # decoder
         self.convs = OrderedDict()
@@ -46,15 +47,11 @@ class DepthDecoder(nn.Module):
         self.decoder = nn.ModuleList(list(self.convs.values()))
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, input_features):
+    def forward(self, input_encoded, input_features):
         self.outputs = []
+        use_skips = input_features is not None and len(input_features) > 0
 
-        if isinstance(input_features, list):
-            x = input_features[-1]
-            use_skips = True
-        else:
-            x = self.fc(input_features).view(input_features.size(0),self.num_ch_enc[-1],8,8)  # MOD here insteaa of conclutional blocks to upsample there is a FC
-            use_skips = False
+        x = self.fc(input_encoded).view(input_encoded.size(0), self.num_ch_enc[-1], self.final_dim, self.final_dim)  # MOD here insteaa of conclutional blocks to upsample there is a FC
 
         for i in range(4, -1, -1):
             x = self.convs[("upconv", i, 0)](x)

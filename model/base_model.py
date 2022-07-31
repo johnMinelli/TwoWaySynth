@@ -113,22 +113,22 @@ class BaseModel():
 
     def forward(self):
         self.z_a, self.z_features_a = self.encode(self.real_A)  # [b,nz*3] [high to low features]
+        self.depth_a_skip, _ = self.depthdecode(self.z_a, self.z_features_a[:-1])  # for loss
         self.z_b, self.z_features_b = self.encode(self.real_B)  # for loss
-        self.depthunskipped_b, _ = self.depthdecode(self.z_b)  # for loss
-        self.depthskipped_b, self.depth_scales_b = self.depthdecode(self.z_b, self.z_features_b[:-1])  # for loss
+        self.depth_b_unskip, _ = self.depthdecode(self.z_b)  # for loss
+        self.depth_b_skip, self.depth_scales_b = self.depthdecode(self.z_b, self.z_features_b[:-1])  # for loss
 
         self.z_a2b = self.transform(self.z_a, self.real_RT)  # [b,nz*3]
         # get depth from latent no_skip
-        self.depthunskipped_a2b, self.depth_scales_a2b = self.depthdecode(self.z_a2b)  # [low to high features]
-        self.depthskipped_a, _ = self.depthdecode(self.z_a, self.z_features_a[:-1])  # for loss
+        self.depth_a2b_unskip, self.depth_scales_a2b_unskip = self.depthdecode(self.z_a2b)  # [low to high features]
 
-        # warp 'z_features_a' with 'depth_scales_a2b' for depth skip connections
-        self.z_features_warped = self.warp_features(self.z_features_a, self.depth_scales_a2b[::-1], intrinsics_ratios=[0.5, 0.25, 0.125, 0.0625, 0.03125])
-        self.depthskipped_b_warped, self.depth_scales_b_skip_warped = self.depthdecode(self.z_a2b, self.z_features_warped[:-1])
+        # warp 'z_features_a' with 'depth_scales_a2b_unskip' for depth skip connections
+        self.z_features_a2b_u = self.warp_features(self.z_features_a, self.depth_scales_a2b_unskip[::-1], intrinsics_ratios=[0.5, 0.25, 0.125, 0.0625, 0.03125])
+        self.depth_a2b_skip, self.depth_scales_a2b_skip = self.depthdecode(self.z_a2b, self.z_features_a2b_u[:-1])
 
-        # again warp 'z_features_a' with better 'depth_scales_a2b' for nvs skip connections
-        self.z_features_skip_warped = self.warp_features(self.z_features_a, self.depth_scales_b_skip_warped[::-1], intrinsics_ratios=[0.5, 0.25, 0.125, 0.0625, 0.03125])
-        self.fake_B3, self.fake_B2, self.fake_B1, self.fake_B = self.decode(self.z_a2b, self.z_features_skip_warped[:-1] if not self.train_mode or self.nvs_mode else self.z_features_b[:-1])
+        # again warp 'z_features_a' with better 'depth_scales_a2b_skip' to obtain features for nvs skip connections
+        self.z_features_a2b_s = self.warp_features(self.z_features_a, self.depth_scales_a2b_skip[::-1], intrinsics_ratios=[0.5, 0.25, 0.125, 0.0625, 0.03125])
+        self.fake_B3, self.fake_B2, self.fake_B1, self.fake_B = self.decode(self.z_a2b, self.z_features_a2b_s[:-1] if not self.train_mode or self.nvs_mode else self.z_features_b[:-1])
         # self.fake_direct_B3, self.fake_direct_B2, self.fake_direct_B1, self.fake_direct_B = self.decode(self.z_b, self.z_features_b)  # for loss
 
     def warp_features(self, z_features, depth_scales, intrinsics_ratios):
@@ -150,35 +150,36 @@ class BaseModel():
             return [1 / (10 * torch.sigmoid(output_scale) + 0.01) for output_scale in outputs]  # predict disparity instead of depth for natural scenes
         elif self.opt.dataset in ['shapenet']:
             outputs = [torch.tanh(output_scale) * self.depth_scale + self.depth_bias for output_scale in outputs]  # here do inversion if needed
-            return outputs[-1], [F.interpolate(output, scale_factor=0.5, mode=self.opt.upsample_mode) for output in outputs]
+            return outputs[-1], [F.interpolate(output, scale_factor=0.5, mode=self.opt.upsample_mode) for output in outputs]  # TODO io qui toglierei una scale e il downsample
 
     def backward_G(self):
 
         # https://www.sciencedirect.com/science/article/pii/S0923596508001197
         # Multiscale reconstruction loss for NVS output
-        self.loss_reco = (F.l1_loss(self.fake_B,self.real_B) \
+        self.loss_reco = F.l1_loss(self.fake_B,self.real_B) \
                 + 0.5*F.l1_loss(F.interpolate(self.fake_B1, scale_factor=2, mode=self.opt.upsample_mode), self.real_B) \
                 + 0.2*F.l1_loss(F.interpolate(self.fake_B2, scale_factor=4, mode=self.opt.upsample_mode), self.real_B) \
-                + 0.1*F.l1_loss(F.interpolate(self.fake_B3, scale_factor=8, mode=self.opt.upsample_mode), self.real_B))
+                + 0.1*F.l1_loss(F.interpolate(self.fake_B3, scale_factor=8, mode=self.opt.upsample_mode), self.real_B)
 
         # VGG perceptual loss
         self.vgg_loss = self.vgg(self.fake_B, self.real_B)
 
         # Image with depth quality
-        self.loss_depth_smooth = get_depth_smoothness(self.depthskipped_b, self.real_B) \
-                                  + get_depth_smoothness(self.depthskipped_a, self.real_A)
+        self.loss_depth_smooth = get_depth_smoothness(self.depth_b_skip, self.real_B) \
+                                  + get_depth_smoothness(self.depth_a_skip, self.real_A)  # FIXME maybe is better unskip here?
 
         # Multiscale transformation/warping loss for depth quality: to supervise the warped scales
-        self.loss_warp, warped, diff = photometric_reconstruction_loss(self.real_B, self.real_A, self.intrinsics, self.depth_scales_b+[self.depthskipped_b], self.real_RT)
+        self.loss_warp, warped, diff = photometric_reconstruction_loss(self.real_B, self.real_A, self.intrinsics, self.depth_scales_b + [self.depth_b_skip], self.real_RT)
+        # FIXME as it is optimize depth decoder for ground truth input then force similarity between warped and gt depth. Maybe a direct optimization would be harder but better?
 
         # Loss to improve unskipped depth quality: to improve warping of skipped scales
-        depthskipped_b = self.depthskipped_b.detach().clone()
-        self.loss_unskip = F.l1_loss(self.depthunskipped_a2b * (torch.median(depthskipped_b) / torch.median(self.depthunskipped_a2b)), depthskipped_b)
-        self.loss_skip = F.l1_loss(self.depthskipped_b_warped * (torch.median(depthskipped_b) / torch.median(self.depthskipped_b_warped)), depthskipped_b)
+        depth_b_skip = self.depth_b_skip.detach().clone()
+        self.loss_unskip = F.l1_loss(self.depth_a2b_unskip * (torch.median(depth_b_skip) / torch.median(self.depth_a2b_unskip)), depth_b_skip)
+        self.loss_skip = F.l1_loss(self.depth_a2b_skip * (torch.median(depth_b_skip) / torch.median(self.depth_a2b_skip)), depth_b_skip)
 
         # Encoder quality and depth_decoder quality with gt # to enable if you want to use the gt_depth
         # self.loss_depth = depth_loss(self.real_depth_B, self.real_flow_B, self.depth_a2b, self.fake_flow_B)
-        # self.loss_depth = F.l1_loss(self.real_depth_B, self.depthskipped_b)
+        # self.loss_depth = F.l1_loss(self.real_depth_B, self.depth_b_skip)
 
         self.loss_G = (self.loss_reco+self.loss_warp) * self.opt.lambda_recon  # 10.0
         self.loss_G += (self.loss_unskip+self.loss_skip) * self.opt.lambda_skip  # 1.0
@@ -220,9 +221,9 @@ class BaseModel():
         return OrderedDict({
                             'L1': F.l1_loss(self.fake_B, self.real_B).item(),
                             'SSIM': ssim(self.fake_B * 0.5 + 0.5, self.real_B * 0.5 + 0.5).item(),
-                            'depth_L1_real': F.l1_loss(self.depthskipped_b_warped[torch.logical_and(self.real_depth_B>0, self.real_depth_B<self.opt.max_depth)], self.real_depth_B[torch.logical_and(self.real_depth_B>0, self.real_depth_B<self.opt.max_depth)]).item(),
-                            'depth_L1_direct': F.l1_loss(self.depthskipped_b_warped, self.depthskipped_b).item(),
-                            **compute_depth_metrics(self.real_depth_B, self.depthskipped_b, max_depth=self.opt.max_depth)})
+                            'depth_L1_real': F.l1_loss(self.depth_a2b_skip[torch.logical_and(self.real_depth_B > 0, self.real_depth_B < self.opt.max_depth)], self.real_depth_B[torch.logical_and(self.real_depth_B > 0, self.real_depth_B < self.opt.max_depth)]).item(),
+                            'depth_L1_direct': F.l1_loss(self.depth_a2b_skip, self.depth_b_skip).item(),
+                            **compute_depth_metrics(self.real_depth_B, self.depth_b_skip, max_depth=self.opt.max_depth)})
 
     def get_current_visuals(self):
         """
@@ -233,10 +234,10 @@ class BaseModel():
                             'real_depth_B': tensor2im(self.real_depth_B.data[0]),
                             'fake_B': tensor2im(self.fake_B.data[0]),
                             # 'fake_direct_B': tensor2im(self.fake_direct_B.data[0]),
-                            'depth_B_unskip_warped': tensor2im(self.depthunskipped_a2b.data[0]),
-                            'depth_B_skip_warped': tensor2im(self.depthskipped_b_warped.data[0]),
-                            'depth_B_unskip': tensor2im(self.depthunskipped_b.data[0]),
-                            'depth_B_skip': tensor2im(self.depthskipped_b.data[0]),
+                            'depth_B_unskip_warped': tensor2im(self.depth_a2b_unskip.data[0]),
+                            'depth_B_skip_warped': tensor2im(self.depth_a2b_skip.data[0]),
+                            'depth_B_unskip': tensor2im(self.depth_b_unskip.data[0]),
+                            'depth_B_skip': tensor2im(self.depth_b_skip.data[0]),
                             })
 
     def get_current_anim(self):

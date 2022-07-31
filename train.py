@@ -118,7 +118,7 @@ def run_model(dataloader, model, logger):
 if __name__ == '__main__':
     global parser_config
     parser_config = TrainOptions().parse()
-    fix_random(parser_config.seed)
+
     if parser_config.sweep_id is not None:
         wandb.agent(parser_config.sweep_id, main)
     else:

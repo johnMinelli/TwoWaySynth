@@ -41,7 +41,7 @@ def photometric_reconstruction_loss(tgt_img, ref_img, intrinsics, depth_scales, 
 
     total_loss = 0
     for d in depth_scales:
-        loss, warped, diff = one_scale(d)
+        loss, warped, diff = one_scale(d)  # TODO use weights
         total_loss += loss
         warped_results.append(warped)
         diff_results.append(diff)

@@ -51,8 +51,8 @@ class DepthDecoder(nn.Module):
         self.outputs = []
         use_skips = input_features is not None and len(input_features) > 0
 
-        x = self.fc(input_encoded).view(input_encoded.size(0), self.num_ch_enc[-1], self.final_dim, self.final_dim)  # MOD here insteaa of conclutional blocks to upsample there is a FC
-
+        x = self.fc(input_encoded).view(input_encoded.size(0), self.num_ch_enc[-1], self.final_dim, self.final_dim)  # MOD here insteaa of convolutional blocks to upsample there is a FC
+        # TODO upsample handled in convblock
         for i in range(4, -1, -1):
             x = self.convs[("upconv", i, 0)](x)
             x = upsample(x, mode=self.upsample_mode)

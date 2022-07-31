@@ -14,6 +14,8 @@ class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, norm, nonlin=nn.ELU, use_refl=True):
         super(ConvBlock, self).__init__()
 
+        # TODO add upsample here elsewise use transposed convs
+        # upconv = [nn.ConvTranspose2d(inplanes, outplanes, kernel_size=4, stride=2, padding=1)]
         self.conv = Conv3x3(in_channels, out_channels, use_refl)
         self.norm = norm(out_channels) if norm is not None else None
         self.nonlin = nonlin()

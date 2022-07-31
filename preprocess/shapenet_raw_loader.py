@@ -45,7 +45,7 @@ class ShapeNetRawLoader(object):
         for i, img in enumerate(img_files):
             scene_data['frame_id'].append('{:02d}'.format(i))
         # read metadata
-        parse_line_metadata = lambda s : np.array(json.loads("[" + s.replace("\n", "")[:-2] + "]"))
+        parse_line_metadata = lambda s: np.array(json.loads("[" + s.replace("\n", "")[:-2] + "]"))
         with open(scene/'rendering_metadata.txt') as file:
             s = []
             for pos in parse_line_metadata(file.read()):

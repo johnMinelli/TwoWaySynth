@@ -14,3 +14,6 @@ termcolor
 path
 tqdm
 pebble
+progressbar
+opencv-python
+visdom

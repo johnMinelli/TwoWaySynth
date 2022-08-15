@@ -28,7 +28,7 @@ class ResnetEncoder(nn.Module):
         if num_layers > 34:
             self.num_ch_enc[1:] *= 4
         final_dim = np.exp2(np.log2(self.num_ch_enc.max())-np.log2(self.num_ch_enc.min())).astype(np.int)
-        fc = [nn.Linear(self.num_ch_enc[-1]*final_dim*final_dim, nz)]  #512*8*8
+        fc = [nn.Linear(self.num_ch_enc[-1]*final_dim*final_dim, nz)]  # 512*8*8
         if dropout: fc += [nn.Dropout(0.3)]
         self.fc = nn.Sequential(*fc)
 
@@ -40,7 +40,7 @@ class ResnetEncoder(nn.Module):
 
     def forward(self, input_image):
         self.features = []
-        x = (input_image - 0.45) / 0.225  # /* note the normalization */
+        # x = (input_image - 0.45) / 0.225
         x = self.encoder.conv1(input_image)
         x = self.encoder.bn1(x)
         self.features.append(self.encoder.relu(x))
@@ -49,5 +49,5 @@ class ResnetEncoder(nn.Module):
         self.features.append(self.encoder.layer3(self.features[-1]))
         self.features.append(self.encoder.layer4(self.features[-1]))
 
-        return self.fc(self.features[-1].view(input_image.size(0),-1)), self.features
+        return self.fc(self.features[-1].view(input_image.size(0),-1)), self.features[:-1]
         # MOD here FC instead of MaxPool: I don't want to classify, the details must be maintained.

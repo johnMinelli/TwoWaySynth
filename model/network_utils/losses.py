@@ -7,7 +7,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from model.network_utils.metrics import ssim
-from model.network_utils.projection_layer import inverse_warp
+from model.network_utils.projection_layer import warp
 
 
 # Depth loss took and adapted from SfMLearner - "Unsupervised Learning of Depth and Ego-Motion from Video"
@@ -22,7 +22,7 @@ def photometric_reconstruction_loss(tgt_img, ref_img, intrinsics, depth_scales, 
         ref_img_scaled = F.interpolate(ref_img * 0.5 + 0.5, (h, w), mode='area')
         intrinsics_scaled = torch.cat((intrinsics[:, 0:2]/downscale, intrinsics[:, 2:]), dim=1)
 
-        ref_img_warped, _, valid_points = inverse_warp(ref_img_scaled, depth[:,0], pose, intrinsics_scaled)
+        ref_img_warped, _, valid_points = warp(ref_img_scaled, depth[:,0], pose, intrinsics_scaled)
 
         # consider the difference between (only) projected points respect to the target image
         diff = ((tgt_img_scaled - ref_img_warped) * (1-valid_points.float()))

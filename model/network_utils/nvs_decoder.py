@@ -51,7 +51,7 @@ class NvsDecoder(nn.Module):
         self.outputs = []
 
         x = self.fc(input_encoded).view(input_encoded.size(0), self.num_ch_enc[-1], self.final_dim, self.final_dim)  # MOD here I used a FC instead of ConvTranspose2d(in, out, kernel_size=4, stride=2, padding=1) till a 8x8 dim
-        # TODO use transposed convolutions to upsample
+
         for i in range(4, -1, -1):
             x = self.convs[("upconv", i, 0)](x)
             x = [upsample(x, mode=self.upsample_mode)]

@@ -26,7 +26,7 @@ def main():
     if args.dataset == 'kitti':
         args.max_depth = 80.0
     elif args.dataset == 'shapenet':
-        args.max_depth = 1.75
+        args.max_depth = 4
 
     train_ds = CreateDataset(args, train=True)
     val_ds = CreateDataset(args, valid=True)

@@ -8,8 +8,9 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument("--train_file", type=str, required=True, help='file with the pairs of the train split')
         self.parser.add_argument("--test_file", type=str, required=True, help='file with the pairs of the test split')
         self.parser.add_argument("--depth", type=str, default=None, choices=["", "sparse", "dense"], help="If available (e.g. with KITTI), will use depth ground truth in validation")
-        self.parser.add_argument('--max_seq_distance', type=int, default=4,  help='[ShapeNet] pairs of images will be use created with a images at a maximum distanca of max_seq_distance.'
+        self.parser.add_argument('--max_az_distance', type=int, default=2,  help='[ShapeNet] pairs of images will be created with a images at a maximum azimuth distanca of max_az_distance.'
                                                                                   'The higher the value, the more rotation will occur between the images.')
+        self.parser.add_argument('--rand_el_distance', action='store_true', help='[ShapeNet] pairs of images will be created with a images at a random elevation distanca.')
         # output settings
         self.parser.add_argument('--display_freq', type=int, default=1, help='frequency of showing training results on screen')
         self.parser.add_argument('--print_freq', type=int, default=50, help='frequency of showing training results on console')
@@ -32,7 +33,7 @@ class TrainOptions(BaseOptions):
         self.parser.add_argument('--lr_decay_every', type=int, default=50, help='[lr_policy=step] multiply by a gamma by lr_decay_every iterations')
         self.parser.add_argument('--init_type', type=str, default='normal', help='network initialization [normal|xavier|kaiming|orthogonal]')
         self.parser.add_argument('--lambda_recon', type=float, default=131.0, help='scale for reconstruction loss')
-        self.parser.add_argument('--lambda_skip', type=float, default=78.0, help='scale for skip features loss')
+        self.parser.add_argument('--lambda_consistency', type=float, default=78.0, help='scale for skip features loss')
         self.parser.add_argument('--lambda_smooth', type=float, default=159.0, help='scale for edge smoothness loss')
         self.parser.add_argument('--lambda_vgg', type=float, default=56.0, help='scale for vgg perceptual loss')
         self.parser.add_argument('--fast_train', action='store_true', help='initally train NVSDecoder with GT features untill valid_depth_L1_direct stays under a threshold')

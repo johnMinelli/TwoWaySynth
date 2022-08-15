@@ -1,9 +1,9 @@
 from __future__ import division
+
+import cv2
 import torch
 import random
 import numpy as np
-#from scipy.misc import imresize
-import scipy
 import scipy.ndimage
 import numbers
 import collections
@@ -13,11 +13,8 @@ from itertools import permutations
 def _is_numpy_image(img):
     return isinstance(img, np.ndarray) and (img.ndim in {2, 3})
 
-def _is_pil_image(img):
-    return isinstance(img, Image.Image)
-
 def _is_tensor_image(img):
-    return torch.is_tensor(img) and img.ndimension() == 3
+    return torch.is_tensor(img) and img.squeeze().ndimension() == 3
 
 class Compose(object):
     def __init__(self, transforms):
@@ -85,13 +82,13 @@ class Normalize(object):
     def __call__(self, images):
         for tensor in images:
             # check non-existent file
-            if _is_tensor_image is False:
+            if _is_tensor_image(tensor) is False:
                 continue
             for t, m, s in zip(tensor, self.mean, self.std):
                 t.sub_(m).div_(s)
         return images
 
-class ArrayToTensorNumpy(object):
+class ArrayToTensor(object):
     """Converts a list of numpy.ndarray (H x W x C) to torch.FloatTensor of shape (C x H x W) """
     def __call__(self, images):
         tensors = []
@@ -101,7 +98,9 @@ class ArrayToTensorNumpy(object):
                 tensors.append(im)
                 continue
             # put it from HWC to CHW format
-            im = im.transpose((2, 0, 1))
+            if im.ndim == 3:
+                im = im.transpose((2, 0, 1))
+            else: im = np.expand_dims(im, axis=0)
             # handle numpy array
             tensors.append(torch.from_numpy(im).float())
         return tensors
@@ -233,35 +232,19 @@ class RandomScaleCrop(object):
         return cropped_images
 
 class Resize(object):
-    """Resize the the given ``numpy.ndarray`` to the given size.
+    """Resize the given ``numpy.ndarray`` to the given size with cv2.INTER_NEAREST interpolation method.
+
     Args:
-        size (sequence or int): Desired output size. If size is a sequence like
-            (h, w), output size will be matched to this. If size is an int,
-            smaller edge of the image will be matched to this number.
-            i.e, if height > width, then image will be rescaled to
-            (size * height / width, size)
-        interpolation (int, optional): Desired interpolation. Default is
-            ``PIL.Image.BILINEAR``
-    'nearest' or 'bilinear'
+        size (sequence): Desired output size in sequence-like format (h, w)
     """
-    def __init__(self, interpolation='bilinear'):
-        self.interpolation = interpolation
-    def __call__(self, img,size, img_type = 'rgb'):
-        assert isinstance(size, int) or isinstance(size, float) or \
-               (isinstance(size, collections.Iterable) and len(size) == 2)
-        if img_type == 'rgb':
-            return scipy.misc.imresize(img, size, self.interpolation)
-        elif img_type == 'depth':
-            if img.ndim == 2:
-                img = scipy.misc.imresize(img, size, self.interpolation, 'F')
-            elif img.ndim == 3:
-                img = scipy.misc.imresize(img[:,:,0], size, self.interpolation, 'F')
-            img_tmp = np.zeros((img.shape[0], img.shape[1],1),dtype=np.float32)
-            img_tmp[:,:,0] = img[:,:]
-            img = img_tmp
-            return img
-        else:
-            RuntimeError('img should be ndarray with 2 or 3 dimensions. Got {}'.format(img.ndim))
+    def __init__(self, size):
+        assert (isinstance(size, collections.Iterable) and len(size) == 2)
+        self.size = size
+    def __call__(self, images):
+        images_resized = []
+        for im in images:
+            images_resized.append(cv2.resize(im, dsize=self.size, interpolation=cv2.INTER_NEAREST) if im is not None else im)
+        return images_resized
 
 class CenterCrop(object):
     """Crops the given ``numpy.ndarray`` at the center.

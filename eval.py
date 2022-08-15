@@ -18,7 +18,7 @@ def main():
     if args.dataset == 'kitti':
         args.max_depth = 80.0
     elif args.dataset == 'shapenet':
-        args.max_depth = 1.75
+        args.max_depth = 4
 
     eval_ds = CreateDataset(args, eval=True)
     print(f'{len(eval_ds)} samples found for evaluation')

@@ -1,6 +1,6 @@
 import random
 from scipy.spatial.transform import Rotation as ROT
-from datasets.transform_list import RandomCropNumpy, EnhancedCompose, RandomColor, RandomHorizontalFlip, ArrayToTensorNumpy, Normalize
+from datasets.transform_list import RandomCropNumpy, EnhancedCompose, RandomColor, RandomHorizontalFlip, ArrayToTensor, Normalize
 from torchvision import transforms
 import os
 import csv
@@ -16,11 +16,13 @@ def _is_pil_image(img):
     return isinstance(img, Image.Image)
 
 class KITTIDataset(data.Dataset):
-    def __init__(self, args, train=True):
+    def __init__(self, args, train, valid, eval):
         self.train = train
+        self.valid = valid
+        self.eval = eval
         self.args = args
-        self.use_dense_depth = args.depth == "dense"
-        self.use_sparse_depth = args.depth == "sparse"
+
+        self.use_dense = args.gt_depth is not None
         self.data_root = Path(args.data_path)
 
         self.transform = Transformer(args)
@@ -166,6 +168,12 @@ class KITTIDataset(data.Dataset):
         # compensated_poses = np.linalg.inv(first_pose[:, :3]) @ poses
         # # ----
 
+
+        # R = np.linalg.inv(np.linalg.inv(PA) @ PB) @ (np.eye(3) * (1 - (PA_scale - PB_scale)))
+        # 
+        # T = -R.dot(T)+T
+        # RT = np.block([[R, T], [np.zeros((1, 3)), 1]]).astype(np.float32)
+
         return {'A': A, 'B': B, 'RT': full_mat_poses, 'DA': DA, 'DB': DB}
 
     def __len__(self):
@@ -199,11 +207,11 @@ class Transformer(object):
             RandomCropNumpy((args.height,args.width)),
             RandomHorizontalFlip(),
             [RandomColor(multiplier_range=(0.9, 1.1)), None, None],
-            ArrayToTensorNumpy(),
+            ArrayToTensor(),
             [transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), None, None]
         ])
         self.test_transform = EnhancedCompose([
-            ArrayToTensorNumpy(),
+            ArrayToTensor(),
             [transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), None, None]
         ])
     def __call__(self, images, train=True):

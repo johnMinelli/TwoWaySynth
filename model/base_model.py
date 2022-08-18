@@ -74,7 +74,6 @@ class BaseModel():
 
         if self.isTrain:
             # train parameters
-            self.backup_dir = os.path.join(opt.save_path, opt.name)
             self.nvs_mode = not opt.fast_train
             # initialize optimizers
             self.schedulers, self.optimizers = [], []
@@ -103,7 +102,7 @@ class BaseModel():
 
     def set_input(self, input):
         self.real_A = Variable(input['A'].to(self.device))
-        # self.real_depth_A = Variable(input['DA'].to(self.device))
+        self.real_depth_A = Variable(input['DA'].to(self.device))
         self.real_B = Variable(input['B'].to(self.device))
         self.real_depth_B = Variable(input['DB'].to(self.device))
         self.real_RT = Variable(input['RT'].to(self.device))

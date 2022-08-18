@@ -27,6 +27,11 @@ pebble
 tqdm
 ```
 
+cd ./model/network_utils/resample2d_package
+rm -rf *_cuda.egg-info build dist __pycache__
+python3 setup.py install --user
+
+
 ## Preparing training data
 Download ShapeNet dataset and run the following command
 
@@ -59,3 +64,18 @@ python3 eval.py --name shapenet --dataset shapenet --save_images --save_path ./s
 
 [//]: # ([Chairs]&#40;https://drive.google.com/drive/folders/&#41;)
 [//]: # ([Cars]&#40;https://drive.google.com/drive/folders/&#41;)
+
+
+split from sfmlearner
+eval from sfmlearner
+https://github.com/tinghuiz/SfMLearner/blob/master/kitti_eval/eval_depth.py
+altro più completo
+https://github.com/cleinc/bts/blob/master/utils/eval_with_pngs.py#L50
+inpainting from densedepth as lapdepth
+https://gist.github.com/ialhashim/be6235489a9c43c6d240e8331836586a
+altri inpainting
+https://github.com/soulslicer/kitti_depthmap
+https://github.com/danxuhk/StructuredAttentionDepthEstimation/blob/master/StructuredAttentionDepthEstimation/utils/fill_depth_hole.py
+https://github.com/balcilar/DenseDepthMap
+most promising with MATLAB
+https://github.com/wangq95/KITTI_Dense_Depth

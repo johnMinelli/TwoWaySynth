@@ -6,11 +6,12 @@ class TrainOptions(BaseOptions):
         BaseOptions.initialize(self)
         # input settings
         self.parser.add_argument("--train_file", type=str, required=True, help='file with the pairs of the train split')
-        self.parser.add_argument("--test_file", type=str, required=True, help='file with the pairs of the test split')
-        self.parser.add_argument("--depth", type=str, default=None, choices=["", "sparse", "dense"], help="If available (e.g. with KITTI), will use depth ground truth in validation")
-        self.parser.add_argument('--max_az_distance', type=int, default=2,  help='[ShapeNet] pairs of images will be created with a images at a maximum azimuth distanca of max_az_distance.'
-                                                                                  'The higher the value, the more rotation will occur between the images.')
-        self.parser.add_argument('--rand_el_distance', action='store_true', help='[ShapeNet] pairs of images will be created with a images at a random elevation distanca.')
+        self.parser.add_argument("--valid_file", type=str, required=True, help='file with the pairs of the test split')
+        self.parser.add_argument("--gt_depth", action='store_true', help="Use depth ground truth to compute metrics")
+        self.parser.add_argument('--max_az_distance', type=int, default=2, help='[ShapeNet] pairs of images will be created with a random image at a maximum azimuth distanca of max_az_distance.'
+                                                                                  'The higher the value, the more rotation will occur between the images. Min 1.')
+        self.parser.add_argument('--rand_el_distance', action='store_true', help='[ShapeNet] pairs of images will be created with a images at a random elevation distance.')
+        self.parser.add_argument('--max_kitti_distance', type=int, default=5, help='[KITTI] pairs of images will be created with random images at a maximum range distance of max_kitti_distance. Min 3.')
         # output settings
         self.parser.add_argument('--display_freq', type=int, default=1, help='frequency of showing training results on screen')
         self.parser.add_argument('--print_freq', type=int, default=50, help='frequency of showing training results on console')

@@ -1,6 +1,4 @@
 import argparse
-import os
-import torch
 
 
 class BaseOptions():
@@ -25,13 +23,12 @@ class BaseOptions():
         self.parser.add_argument('--save_images', action='store_true', help='if specified, result images will be saved in save_path')
 
         # data loading related
-        self.parser.add_argument('--data_path', type=str, required=True, help='path to dataset')
+        self.parser.add_argument('--data_path', type=str, required=True, help='path to dataset files')
         self.parser.add_argument("--dataset", type=str, default='kitti', choices=["kitti", "shapenet"])
-        self.parser.add_argument("--dataset_format", type=str, default='kitti', choices=["kitti", "shapenet"])
 
-        # train and eval: models hyperparameters
+        # train and eval: models hyper-parameters
         # experiment related
-        self.parser.add_argument('--nz_geo', type=int, default=200, help='number of latent points')
+        self.parser.add_argument('--z_size', type=int, default=200, help='number of latent points')
         self.parser.add_argument('--padding_mode', type=str, choices=['zeros', 'border'], default='border',
                             help='padding mode for image warping : this is important for photometric differenciation when going outside target image.'
                                  ' zeros will null gradients outside target image.'
@@ -54,6 +51,12 @@ class BaseOptions():
             if id >= 0:
                 self.opt.gpu_ids.append(id)
 
+        if self.opt.max_az_distance < 1:
+            raise Exception("Minimum value allowed for 'max_az_distance' allowed is 1")
+
+        if self.opt.max_kitti_distance < 3:
+            raise Exception("Minimum value allowed for 'max_kitti_distance' allowed is 3")
+
         args = vars(self.opt)
 
         print('------------ Options -------------')
@@ -62,11 +65,7 @@ class BaseOptions():
         print('-------------- End ----------------')
 
         # save to the disk
-        expr_dir = os.path.join(".", self.opt.name)
-        try:
-            os.makedirs(expr_dir)
-        except: pass
-        file_name = os.path.join(expr_dir, 'opt.txt')
+        file_name = self.opt.name+'_opt.txt'
         with open(file_name, 'wt') as opt_file:
             opt_file.write('------------ Options -------------\n')
             for k, v in sorted(args.items()):

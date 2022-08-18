@@ -233,7 +233,6 @@ class RandomScaleCrop(object):
 
 class Resize(object):
     """Resize the given ``numpy.ndarray`` to the given size with cv2.INTER_NEAREST interpolation method.
-
     Args:
         size (sequence): Desired output size in sequence-like format (h, w)
     """

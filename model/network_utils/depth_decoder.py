@@ -63,4 +63,4 @@ class DepthDecoder(nn.Module):
             x = self.convs[("upconv", i, 1)](x)         # MOD this is fixed instead in an else branch
             if i in self.scales:
                 self.outputs += [self.convs[("dispconv", i)](x)]
-        return self.outputs                             # MOD here consider that even if fetures returned have dim in range [16-256] they were downscaled to [8-128]
+        return self.outputs

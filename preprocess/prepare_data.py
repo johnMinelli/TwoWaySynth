@@ -10,7 +10,7 @@ from options.preprocess_options import PreprocessOptions
 def dump_example(args, scene):
     scene_list = data_loader.collect_from_scene(scene)
     for scene_data in scene_list:
-        dump_dir = args.dump_root/scene_data['rel_path']
+        dump_dir = args.dump_path/scene_data['rel_path']
         dump_dir.makedirs_p()
         intrinsics = scene_data['intrinsics']
 
@@ -26,15 +26,14 @@ def dump_example(args, scene):
             imageio.imsave(dump_img_file, img)
             if "pose" in sample.keys():
                 p=[frame_nb]  # id
-                p.extend(['%.6e' % s for s in sample["pose"][0].reshape(-1, 9)[0]])  # pose matrix
-                p.append(sample["pose"][1])  # scale
+                p.extend(['%.6e' % s for s in sample["pose"].reshape(16)])  # pose matrix
                 poses.append(p)
-            if "dense_depth" in sample.keys():
-                dump_depth_file = dump_dir/'{}.png'.format(frame_nb+"_dense_depth")
-                imageio.imsave(dump_depth_file, sample["dense_depth"].astype(np.uint16))
-            if "sparse_depth" in sample.keys() and  sample["sparse_depth"] is not None:
-                dump_depth_file = dump_dir / '{}.png'.format(frame_nb+"_sparse_depth")
-                imageio.imsave(dump_depth_file, sample["sparse_depth"])
+            if "dense_depth" in sample.keys() and sample["dense_depth"] is not None:
+                dump_depth_file = dump_dir/'{}.png'.format(frame_nb+"_depth")
+                imageio.imsave(dump_depth_file, sample["dense_depth"])
+            if "sparse_depth" in sample.keys():
+                dump_depth_file = dump_dir/'{}.png'.format(frame_nb+"_depth")
+                imageio.imsave(dump_depth_file, sample["sparse_depth"].astype(np.uint16))
 
         if len(poses) != 0:
             np.savetxt(poses_file, poses, fmt='%s')
@@ -46,12 +45,12 @@ def dump_example(args, scene):
 def main():
     args = PreprocessOptions().parse()
 
-    args.dump_root = Path(args.dump_root)
-    args.dump_root.mkdir_p()
+    args.dump_path = Path(args.dump_path)
+    args.dump_path.mkdir_p()
 
     global data_loader
 
-    if args.dataset_format == 'kitti':
+    if args.dataset == 'kitti':
         from kitti_raw_loader import KittiRawLoader
         data_loader = KittiRawLoader(args.data_path,
                                      static_frames_file=args.static_frames,
@@ -61,13 +60,13 @@ def main():
                                      get_pose=args.with_pose,
                                      depth_size_ratio=args.depth_size_ratio)
 
-    if args.dataset_format == 'shapenet':
-        from shapenet_raw_loader import ShapeNetRawLoader
-        data_loader = ShapeNetRawLoader(args.data_path,
-                                        img_height=args.height,
-                                        img_width=args.width,
-                                        depth=args.depth,
-                                        get_pose=args.with_pose)
+    # if args.dataset == 'shapenet':  # discontinued since the dataset has been rendered properly from scratch
+    #     from shapenet_raw_loader import ShapeNetRawLoader
+    #     data_loader = ShapeNetRawLoader(args.data_path,
+    #                                     img_height=args.height,
+    #                                     img_width=args.width,
+    #                                     depth=args.depth,
+    #                                     get_pose=args.with_pose)
 
     n_scenes = len(data_loader.scenes)
     print('Found {} potential scenes'.format(n_scenes))

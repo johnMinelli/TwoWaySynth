@@ -21,7 +21,7 @@ class ShapeNetDataset(data.Dataset):
         self.eval = eval
         self.args = args
 
-        self.use_depth = args.depth is not None
+        self.use_depth = args.gt_depth is not None
         self.data_root = Path(args.data_path)
         self.positions = AZ_RANGE*EL_RANGE
 
@@ -29,11 +29,10 @@ class ShapeNetDataset(data.Dataset):
         if train is True:
             self.datafile = args.train_file
         else:
-            self.datafile = args.test_file
+            self.datafile = args.valid_file
 
         # Read split file of ids
         self.samples = []
-        self.scenes_render = {}
         self.intrinsics = np.genfromtxt(self.data_root / '..' / '..' / 'camera_settings' / 'cam_K' / 'cam_K.txt').astype(np.float32).reshape((3,3))
         self.intrinsics[:-1, :] = self.intrinsics[:-1, :] / 2  # halved since the images are resized from 512 to 256
 
@@ -63,7 +62,7 @@ class ShapeNetDataset(data.Dataset):
                 if not os.path.exists(self.data_root/scene_id): continue
                 scene_path = self.data_root/scene_id
 
-                # Make sample: the target is a list in case a future implementation wants to use multiple views
+                # Make samples for sampled object
                 for i in range(self.positions):
                     view_shift = (((((i//EL_RANGE) +  # in range [0, AZ_RANGE]
                                  np.random.randint(1, self.args.max_az_distance+1))*EL_RANGE) % self.positions) +  # random az distance
@@ -134,7 +133,6 @@ class ShapeNetDataset(data.Dataset):
         image_path = os.path.join(self.data_root, filename)
         im = cv2.imread(image_path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)[:,:,:1]
         im[im == np.inf] = -1
-        # im[im<0] = 0
         return im
 
 class Transformer(object):

@@ -1,9 +1,7 @@
 from __future__ import division
 
-import numpy as np
 import torch
 import torchvision
-from torch import nn
 import torch.nn.functional as F
 
 from model.network_utils.metrics import ssim

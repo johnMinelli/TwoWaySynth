@@ -1,19 +1,17 @@
 import random
+
+import cv2
 from scipy.spatial.transform import Rotation as ROT
 from datasets.transform_list import RandomCropNumpy, EnhancedCompose, RandomColor, RandomHorizontalFlip, ArrayToTensor, Normalize
 from torchvision import transforms
 import os
-import csv
 import torch.utils.data as data
 from PIL import Image
 import numpy as np
-import torch
-from PIL import ImageFile
 from path import Path
-ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-def _is_pil_image(img):
-    return isinstance(img, Image.Image)
+MIN_DEPTH = 1e-3
+MAX_DEPTH = 80
 
 class KITTIDataset(data.Dataset):
     def __init__(self, args, train, valid, eval):
@@ -22,47 +20,54 @@ class KITTIDataset(data.Dataset):
         self.eval = eval
         self.args = args
 
-        self.use_dense = args.gt_depth is not None
+        self.use_depth = args.gt_depth is not None
         self.data_root = Path(args.data_path)
 
         self.transform = Transformer(args)
         if train is True:
             self.datafile = args.train_file
-            self.angle_range = (-1, 1)
-            self.depth_scale = 256.0
         else:
-            self.datafile = args.test_file
-            self.depth_scale = 256.0
+            self.datafile = args.valid_file
 
         # Read split file of ids
         self.samples = []
+        self.intrinsics = np.genfromtxt(self.data_root.dirs()[0] / 'cam.txt').astype(np.float32).reshape((3,3))
+        self.intrinsics[2, 0] = 256 / 2  # being a crop, not a resize, only cx and cy should be updated
+        self.intrinsics[2, 1] = 256 / 2
+
         with open(self.datafile, 'r') as f:
             self.fileset = f.readlines()
 
         # Read intrinsics and poses
-        scenes_intrinsics = {}; scenes_poses = {}
-        for scene in self.data_root.dirs()[:-1]:  # FIXME togli il -1
-            scenes_intrinsics[str(scene.name)] = np.genfromtxt(scene/'cam.txt').astype(np.float32).reshape((3, 3))
+        scenes_poses = {}
+        for scene in self.data_root.dirs():
             scene_poses = {}
             for pose in np.genfromtxt(scene/'poses.txt'):
                 scene_poses[int(pose[0])] = pose[1:].astype(np.float64).reshape((3, 4))
             scenes_poses[str(scene.name)] = scene_poses
 
-        for sample_files in [s.strip().split(' ') for s in self.fileset if s]:
-            if not os.path.exists(self.data_root/sample_files[0]) or not os.path.exists(self.data_root/sample_files[1]): continue
-            scene = str(Path(sample_files[0]).dirname().name)
-            id_ref = int(Path(sample_files[0]).name.stripext())
-            ids_tgt = [int(Path(sample_files[1]).name.stripext())]
-
-            intrinsics = scenes_intrinsics[scene]
+        for sample_file in self.fileset:
+            if not os.path.exists(self.data_root/sample_file): continue
+            scene = str(Path(sample_file).dirname().name)
             poses = scenes_poses[scene]
-            # Make sample
-            sample = {'intrinsics': intrinsics, 'pose_ref': poses[id_ref], 'pose_targets': [poses[id_tgt] for id_tgt in ids_tgt],
-                      'ref': self.data_root/sample_files[0], 'targets': [self.data_root/sample_files[1]]}
+
+            id_ref = int(Path(sample_file).name.stripext())
+            last = int((self.data_root/sample_file).parent.files('*.png')[-1].name.stripext())
+            if id_ref+3 > last: continue
+
+            id_tgt = np.random.randint(id_ref+3, min(id_ref+self.args.max_kitti_distance+1, last))  # random target
+            tgt_file = sample_file.replace(str(id_ref), str(id_tgt))
+            if not os.path.exists(self.data_root/tgt_file):
+                print('dropped')  # TODO
+                continue
+
+            # Make samples for sampled image
+            sample = {'pose_ref': poses[id_ref], 'pose_targets': poses[id_tgt],
+                      'ref': self.data_root/sample_file, 'targets': self.data_root/tgt_file}
             self.samples.append(sample)
 
-        random.shuffle(self.samples)
-        self.dataset_size = int(len(self.samples))
+        random.shuffle(self.samples)  # to handle data storage ordering, however seed is fixed
+        self.dataset_size = len(self.samples)
 
 
     def __getitem__(self, index):
@@ -70,111 +75,56 @@ class KITTIDataset(data.Dataset):
         DA = None; DB = None
 
         # create the pair
-        id_source = sample_data["ref"]  # FIXME questo sarebbe invertito in the original dataloader 
-        id_target = sample_data["targets"][0]
+        id_source = sample_data["ref"]
+        id_target = sample_data["targets"]
 
-        # load images
-        A = self.load_image(id_source)
-        B = self.load_image(id_target)
+        # load images [-1,1]
+        A = self.load_image(id_source) / 255. * 2 - 1
+        B = self.load_image(id_target) / 255. * 2 - 1
+        # load depth [0,max_depth], -1 is invalid
+        if self.use_depth:
+            DA = self.load_depth_image((self.data_root/id_source).stripext()+"_depth.png") if \
+                    os.path.exists((self.data_root/id_source).stripext()+"_depth.png") else np.zeros_like(A)
+            DB = self.load_depth_image((self.data_root/id_target).stripext()+"_depth.png") if \
+                    os.path.exists((self.data_root/id_target).stripext()+"_depth.png") else np.zeros_like(B)
 
-        if self.use_sparse_depth:
-            DA = self.load_image((self.data_root/id_source).stripext()+"_sparse_depth.png", rgb=False)
-            DB = self.load_image((self.data_root/id_target).stripext()+"_sparse_depth.png", rgb=False)
-        elif self.use_dense_depth:
-            DA = self.load_image((self.data_root/id_source).stripext()+"_dense_depth.png", rgb=False)
-            DB = self.load_image((self.data_root/id_target).stripext()+"_dense_depth.png", rgb=False)
+            # garg/eigen crop
+            maskA = np.logical_and(DA >= MIN_DEPTH, DA <= MAX_DEPTH)
+            maskB = np.logical_and(DB >= MIN_DEPTH, DB <= MAX_DEPTH)
+            crop_mask = np.zeros(maskA.shape)
+            crop_mask[153:371, 44:1197] = 1
+            DA = DA * np.logical_and(maskA, crop_mask)
+            DB = DB * np.logical_and(maskB, crop_mask)
+            DA[DA==0] = -1
+            DB[DB==0] = -1
 
-        # cropping dimensions that can be divided by 16
+        # cropping dimensions to match input 256x256
         h = A.height
         w = A.width
-        bound_left = (w - 1216) // 2
-        bound_right = bound_left + 1216
-        bound_top = h - 352
-        bound_bottom = bound_top + 352
+        bound_left = (w - 256) // 2
+        bound_right = bound_left + 256
+        bound_top = h - 256
+        bound_bottom = bound_top + 256
 
-        # crop and normalize 0 to 1 ==>  rgb range:(0,1),  depth range: (0, max_depth)
-        A = A.crop((bound_left, bound_top, bound_right, bound_bottom))
-        A = np.asarray(A, dtype=np.float32) / 255.0
-        B = B.crop((bound_left, bound_top, bound_right, bound_bottom))
-        B = np.asarray(B, dtype=np.float32) / 255.0
+        A = A[bound_top:bound_bottom, bound_left:bound_right]
+        B = B[bound_top:bound_bottom, bound_left:bound_right]
+        if self.use_depth:
+            DA = DA[bound_top:bound_bottom, bound_left:bound_right]
+            DB = DB[bound_top:bound_bottom, bound_left:bound_right]
 
-        if _is_pil_image(DA):
-            DA = DA.crop((bound_left, bound_top, bound_right, bound_bottom))
-            DA = (np.asarray(DA, dtype=np.float32)) / self.depth_scale
-            DA = np.expand_dims(DA, axis=2)
-            DA = np.clip(DA, 0, self.args.max_depth)
-        if _is_pil_image(DB):
-            DB = DB.crop((bound_left, bound_top, bound_right, bound_bottom))
-            DB = (np.asarray(DB, dtype=np.float32)) / self.depth_scale
-            DB = np.expand_dims(DB, axis=2)
-            DB = np.clip(DB, 0, self.args.max_depth)
+        # intrinsics
+        I = self.intrinsics
 
-        # A,B,DA,DB = self.transform([A,B,DA,DB], self.train)  #TODO
+        PA = sample_data["pose_ref"]
+        PB = sample_data["pose_target"]
 
-        # pose between images
-        RA = sample_data["pose_ref"]
-        RB = sample_data["pose_targets"]
+        R = PA[:, :3].T @ PB[:, :3]
+        T = PA[:, :3].T.dot(PB[:, 3:] - PA[:, 3:])
 
-        poses = np.stack([RA]+RB)
-        first_pose = poses[0]
-        poses[:, :, -1] -= first_pose[:, -1]
-        compensated_poses = np.linalg.inv(first_pose[:, :3]) @ poses
+        RT = np.block([[R, T], [np.zeros((1, 3)), 1]]).astype(np.float32)
 
-        full_mat_poses = [np.vstack([pose, np.column_stack([np.zeros((1, 3)), 1])]).astype(np.float32) for pose in compensated_poses]
-
-        # make tensors in CHW data format
-        A = torch.from_numpy(A.astype(np.float32)).permute((2, 0, 1))
-        B = torch.from_numpy(B.astype(np.float32)).permute((2, 0, 1))
-        full_mat_poses = torch.tensor(full_mat_poses)
-        
-        # if not self.train:
-        #     angle = np.random.uniform(self.angle_range[0], self.angle_range[1])
-        #     rgb = Image.open(self.data_path+"/"+id_source)
-        #     gt = Image.open(gt_file)
-        #     rgb = rgb.rotate(angle, resample=Image.BILINEAR)
-        #     gt = gt.rotate(angle, resample=Image.NEAREST)
-        #     if self.use_dense_depth:
-        #         gt_dense = Image.open(gt_dense_file)
-        #         gt_dense = gt_dense.rotate(angle, resample=Image.NEAREST)
-
-        # Poses computations
-        # # ---- shapenet files [skip]
-        # T = np.array([0, 0, 2]).reshape((3, 1))
-        #
-        # RA = ROT.from_euler('xyz', [-elev_a, rot_a, 0], degrees=True).as_matrix()
-        # RB = ROT.from_euler('xyz', [-elev_b, rot_b, 0], degrees=True).as_matrix()
-        # R = RA.T @ RB
-        #
-        # T = -R.dot(T) + T
-        # mat = np.block([[R, T], [np.zeros((1, 3)), 1]])
-        # mat_A = np.block([[RA.T, T], [np.zeros((1, 3)), 1]])
-        # mat_B = np.block([[RB.T, T], [np.zeros((1, 3)), 1]])
-        #
-        # # ---- kitti odo poses.txt 6values [skip]
-        # poseA = self.poses[int(id_source.name.stripext())]
-        # poseB = self.poses[int(id_target.name.stripext())]
-        # TA = poseA[3:].reshape(3, 1)
-        # RA = ROT.from_euler('xyz', poseA[0:3]).as_matrix()
-        # TB = poseB[3:].reshape(3, 1)
-        # RB = ROT.from_euler('xyz', poseB[0:3]).as_matrix()
-        # T = RA.T.dot(TB - TA) / 50.  # ???
-        #
-        # mat = np.block([[RA.T @ RB, T], [np.zeros((1, 3)), 1]])
-        #
-        # # ---- pose_Evaluation_utils.py [unsup]
-        # poses = np.stack(pose_list[i] for i in snippet_indices)
-        # first_pose = poses[0]
-        # poses[:, :, -1] -= first_pose[:, -1]
-        # compensated_poses = np.linalg.inv(first_pose[:, :3]) @ poses
-        # # ----
-
-
-        # R = np.linalg.inv(np.linalg.inv(PA) @ PB) @ (np.eye(3) * (1 - (PA_scale - PB_scale)))
-        # 
-        # T = -R.dot(T)+T
-        # RT = np.block([[R, T], [np.zeros((1, 3)), 1]]).astype(np.float32)
-
-        return {'A': A, 'B': B, 'RT': full_mat_poses, 'DA': DA, 'DB': DB}
+        A, B, DA, DB = self.transform([A, B, DA, DB], self.train)  # as tensors; change CHW format; crop; normalize
+        return {'A': A, 'B': B, 'RT': RT, 'DA': DA, 'DB': DB, 'I': I}
 
     def __len__(self):
         return self.dataset_size
@@ -182,88 +132,46 @@ class KITTIDataset(data.Dataset):
     def name(self):
         return 'KITTIDataLoader'
 
-    def load_image(self, filename, rgb=True):
+    def load_image(self, filename):
+        """
+        Load image, turn into narray and normalize in [0,1] range
+        :param filename: filepath to the image
+        :return: normalized HWC narray
+        """
         image_path = os.path.join(self.data_root, filename)
         im = Image.open(image_path)
-        return im.convert('RGB') if rgb else im
+        image = np.asarray(im.convert('RGB'))
+        im.close()
+        return image
 
-    def depth_read(filename):
-        # loads depth map D from png file
-        # and returns it as a numpy array,
-        # for details see readme.txt
-    
-        depth_png = np.array(Image.open(filename), dtype=int)
-        # make sure we have a proper 16bit depth map here.. not 8bit!
-        assert(np.max(depth_png) > 255)
-    
-        depth = depth_png.astype(np.float) / 256.
-        depth[depth_png == 0] = -1.
-        return depth
+    def load_depth_image(self, filename):
+        """
+        Load image, turn into narray
+        :param filename: filepath to the image
+        :return: HW1 narray representing a depth map
+        """
+        image_path = os.path.join(self.data_root, filename)
+        im = cv2.imread(image_path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+        im = im/np.max(im) * MAX_DEPTH
+        im[im == np.inf] = -1
+        return im
 
 
 class Transformer(object):
     def __init__(self, args):
         self.train_transform = EnhancedCompose([
-            RandomCropNumpy((args.height,args.width)),
-            RandomHorizontalFlip(),
-            [RandomColor(multiplier_range=(0.9, 1.1)), None, None],
+            # RandomCropNumpy((args.height,args.width)),
+            # RandomHorizontalFlip(),
+            # [RandomColor(multiplier_range=(0.9, 1.1)), None, None],
             ArrayToTensor(),
-            [transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), None, None]
+            # [transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), None, None]
         ])
         self.test_transform = EnhancedCompose([
             ArrayToTensor(),
-            [transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), None, None]
+            # [transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), None, None]
         ])
     def __call__(self, images, train=True):
         if train is True:
             return self.train_transform(images)
         else:
             return self.test_transform(images)
-
-
-def pose_vec2mat(translation, rototranslation, rotation, scale=1):
-    """
-    Convert 6DoF parameters to transformation matrix.
-    Args:s
-        vec: 6DoF parameters in the order of tx, ty, tz, rx, ry, rz -- [B, 6]
-    Returns:
-        A transformation matrix -- [3, 4]
-    """
-    # translation
-    transvec = np.expand_dims(translation, -1)  # [3, 1]
-
-    # rototranslation
-    azimuth, elevation, radius = rototranslation
-    sRadians = np.deg2rad(azimuth)
-    tRadians = np.deg2rad(elevation)
-    x = radius * scale * np.cos(sRadians) * np.sin(tRadians)
-    y = radius * scale * np.sin(sRadians) * np.sin(tRadians)
-    z = radius * scale * np.cos(tRadians)
-    rototvec = np.array([x, y, z]).reshape((3, 1))  # [3, 1]
-
-    sumtransvec = transvec+rototvec  # [3, 1]
-
-    # rotation
-    x, y, z = scale*np.deg2rad(rotation[0]), scale*np.deg2rad(rotation[1]), scale*np.deg2rad(rotation[2])
-
-    cosz = np.cos(z)
-    sinz = np.sin(z)
-
-    zeros = z * 0
-    ones = zeros + 1
-    zmat = np.stack([cosz, -sinz, zeros, sinz, cosz, zeros, zeros, zeros, ones], axis=0).reshape(3, 3)
-
-    cosy = np.cos(y)
-    siny = np.sin(y)
-
-    ymat = np.stack([cosy, zeros, siny, zeros, ones, zeros, -siny, zeros, cosy], axis=0).reshape(3, 3)
-
-    cosx = np.cos(x)
-    sinx = np.sin(x)
-
-    xmat = np.stack([ones, zeros, zeros, zeros, cosx, -sinx, zeros, sinx, cosx], axis=0).reshape(3, 3)
-
-    rot_mat = xmat @ ymat @ zmat  # [B, 3, 3]
-    sumtransvec= -rot_mat.dot(transvec) + transvec
-    transform_mat = np.concatenate([rot_mat, sumtransvec], axis=1)  # [ 3, 4]
-    return transform_mat

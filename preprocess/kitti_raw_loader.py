@@ -162,7 +162,7 @@ class KittiRawLoader(object):
                     origin = pose_matrix
 
                 odo_pose = imu2cam @ np.linalg.inv(origin) @ pose_matrix @ np.linalg.inv(imu2cam)
-                scene_data['pose'].append(odo_pose[:3])
+                scene_data['pose'].append(odo_pose)
 
             sample = self.load_image(scene_data, 0)
             if sample is None:
@@ -179,10 +179,10 @@ class KittiRawLoader(object):
 
             if self.get_pose:
                 sample['pose'] = scene_data['pose'][i]
-            if self.depth == "dense":
-                sample['dense_depth'] = self.generate_depth_map(scene_data, i)
-            elif self.depth == "sparse":
-                sample['sparse_depth'] = self.load_depth_image(scene_data, i)
+            if self.depth == "sparse":
+                sample['sparse_depth'] = self.generate_depth_map(scene_data, i)
+            elif self.depth == "dense":
+                sample['dense_depth'] = self.load_depth_image(scene_data, i)
             return sample
 
         drive = str(scene_data['dir'].name)
@@ -203,18 +203,17 @@ class KittiRawLoader(object):
         img_file = scene_data['dir']/'image_{}'.format(scene_data['cid'])/'data'/scene_data['frame_id'][n_frame]+'.png'
         if not img_file.isfile():
             return None
-        img = imageio.imread(img_file)
+        img = Image.open(img_file)
         zoom_y = self.img_height/img.shape[0]
         zoom_x = self.img_width/img.shape[1]
-        img = Image.fromarray(img).resize(size=(self.img_width, self.img_height))
+        img = img.resize(size=(self.img_width, self.img_height))
         return img, zoom_x, zoom_y
 
     def load_depth_image(self, scene_data, n_frame):
         depth_file = self.data_path / "data_depth_annotated" / scene_data['dir'].name /"proj_depth" / "groundtruth" / 'image_{}'.format(scene_data['cid']) / scene_data['frame_id'][n_frame] + '.png'
         if not depth_file.isfile():
             return None
-        img = imageio.imread(depth_file)
-        img = Image.fromarray(img).resize(size=(self.img_width, self.img_height))
+        img = Image.open(depth_file).resize(size=(self.img_width, self.img_height))
         return img
 
 

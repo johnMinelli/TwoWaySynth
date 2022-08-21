@@ -39,31 +39,31 @@ class KITTIDataset(data.Dataset):
             self.fileset = f.readlines()
 
         # Read intrinsics and poses
-        scenes_poses = {}
+        self.scenes_poses = {}
+        self.scenes_last_sample = {}
         for scene in self.data_root.dirs():
             scene_poses = {}
             for pose in np.genfromtxt(scene/'poses.txt'):
-                scene_poses[int(pose[0])] = pose[1:].astype(np.float64).reshape((3, 4))
-            scenes_poses[str(scene.name)] = scene_poses
+                scene_poses[int(pose[0])] = pose[1:].astype(np.float64).reshape((4, 4))
+            self.scenes_poses[str(scene.name)] = scene_poses
+            self.scenes_last_sample[str(scene.name)] = int(scene.files('*.png')[-1].name.stripext())
 
-        for sample_file in self.fileset:
+        for i, sample_file in enumerate(self.fileset):
+            sample_file = sample_file.strip()
             if not os.path.exists(self.data_root/sample_file): continue
             scene = str(Path(sample_file).dirname().name)
-            poses = scenes_poses[scene]
 
             id_ref = int(Path(sample_file).name.stripext())
-            last = int((self.data_root/sample_file).parent.files('*.png')[-1].name.stripext())
-            if id_ref+3 > last: continue
+            last = self.scenes_last_sample[scene]
+            if id_ref+3 >= last: continue
 
             id_tgt = np.random.randint(id_ref+3, min(id_ref+self.args.max_kitti_distance+1, last))  # random target
             tgt_file = sample_file.replace(str(id_ref), str(id_tgt))
-            if not os.path.exists(self.data_root/tgt_file):
-                print('dropped')  # TODO
-                continue
+            if not os.path.exists(self.data_root/tgt_file): continue
 
             # Make samples for sampled image
-            sample = {'pose_ref': poses[id_ref], 'pose_targets': poses[id_tgt],
-                      'ref': self.data_root/sample_file, 'targets': self.data_root/tgt_file}
+            sample = {'id_scene': scene, 'id_pose_ref': id_ref, 'id_pose_target': id_tgt,
+                      'ref': sample_file, 'target': tgt_file}
             self.samples.append(sample)
 
         random.shuffle(self.samples)  # to handle data storage ordering, however seed is fixed
@@ -76,7 +76,7 @@ class KITTIDataset(data.Dataset):
 
         # create the pair
         id_source = sample_data["ref"]
-        id_target = sample_data["targets"]
+        id_target = sample_data["target"]
 
         # load images [-1,1]
         A = self.load_image(id_source) / 255. * 2 - 1
@@ -84,9 +84,9 @@ class KITTIDataset(data.Dataset):
         # load depth [0,max_depth], -1 is invalid
         if self.use_depth:
             DA = self.load_depth_image((self.data_root/id_source).stripext()+"_depth.png") if \
-                    os.path.exists((self.data_root/id_source).stripext()+"_depth.png") else np.zeros_like(A)
+                    os.path.exists((self.data_root/id_source).stripext()+"_depth.png") else np.zeros(A.shape[:2])
             DB = self.load_depth_image((self.data_root/id_target).stripext()+"_depth.png") if \
-                    os.path.exists((self.data_root/id_target).stripext()+"_depth.png") else np.zeros_like(B)
+                    os.path.exists((self.data_root/id_target).stripext()+"_depth.png") else np.zeros(B.shape[:2])
 
             # garg/eigen crop
             maskA = np.logical_and(DA >= MIN_DEPTH, DA <= MAX_DEPTH)
@@ -98,12 +98,11 @@ class KITTIDataset(data.Dataset):
             DA[DA==0] = -1
             DB[DB==0] = -1
 
-        # cropping dimensions to match input 256x256
-        h = A.height
-        w = A.width
+        # CENTER cropping dimensions to match input 256x256
+        h, w = A.shape[0:2]
         bound_left = (w - 256) // 2
         bound_right = bound_left + 256
-        bound_top = h - 256
+        bound_top = (h - 256) // 2
         bound_bottom = bound_top + 256
 
         A = A[bound_top:bound_bottom, bound_left:bound_right]
@@ -114,9 +113,9 @@ class KITTIDataset(data.Dataset):
 
         # intrinsics
         I = self.intrinsics
-
-        PA = sample_data["pose_ref"]
-        PB = sample_data["pose_target"]
+        poses = self.scenes_poses[sample_data["id_scene"]]
+        PA = poses[sample_data["id_pose_ref"]]
+        PB = poses[sample_data["id_pose_target"]]
 
         R = PA[:, :3].T @ PB[:, :3]
         T = PA[:, :3].T.dot(PB[:, 3:] - PA[:, 3:])

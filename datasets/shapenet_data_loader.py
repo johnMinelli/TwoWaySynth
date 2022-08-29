@@ -21,7 +21,7 @@ class ShapeNetDataset(data.Dataset):
         self.eval = eval
         self.args = args
 
-        self.use_depth = args.gt_depth is not None
+        self.use_depth = not args.no_gt_depth
         self.data_root = Path(args.data_path)
         self.positions = AZ_RANGE*EL_RANGE
 

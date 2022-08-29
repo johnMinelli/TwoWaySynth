@@ -98,16 +98,10 @@ def compute_depth_metrics(depth_gt, depth_pred, min_depth=1e-3, max_depth=80):
     mask_1 = depth_gt > min_depth
     mask_2 = depth_gt < max_depth
     mask = torch.logical_and(mask_1, mask_2)
-    # garg/eigen crop
-    # crop_mask = torch.zeros_like(mask)
-    # crop_mask[:, :, 153:371, 44:1197] = 1
-    # mask = mask * crop_mask
 
     depth_gt = depth_gt[mask]
     depth_pred = depth_pred[mask]
     depth_pred *= torch.median(depth_gt) / torch.median(depth_pred)
-
-    # depth_pred = torch.clamp(depth_pred, min=1e-3, max=80)
 
     depth_errors = _compute_depth_errors(depth_gt, depth_pred)
 

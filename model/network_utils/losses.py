@@ -14,7 +14,7 @@ def photometric_reconstruction_loss(tgt_img, ref_img, intrinsics, depth_scales, 
 
         b, _, h, w = depth.size()
         downscale = tgt_img.size(2)/h
-
+        weight = 1 if downscale == 1 else 0.6
         # rescale and normalize images which are in [-1,1]
         tgt_img_scaled = F.interpolate(tgt_img * 0.5 + 0.5, (h, w), mode='area')
         ref_img_scaled = F.interpolate(ref_img * 0.5 + 0.5, (h, w), mode='area')
@@ -25,7 +25,7 @@ def photometric_reconstruction_loss(tgt_img, ref_img, intrinsics, depth_scales, 
         # consider the difference between (only) projected points respect to the target image
         diff = ((tgt_img_scaled - ref_img_warped) * (1-valid_points.float()))
         # mask the background (black)
-        reconstruction_loss = diff[tgt_img_scaled>0].abs().mean()
+        reconstruction_loss = diff[tgt_img_scaled>0].abs().mean() * weight
         ### upsample depth not images
         # b, _, h, w = tgt_img.size()
         # ref_img_warped, _, valid_points = inverse_warp(ref_img, F.upsample(depth, (h, w), mode="bilinear", align_corners=False), pose, intrinsics)
@@ -39,7 +39,7 @@ def photometric_reconstruction_loss(tgt_img, ref_img, intrinsics, depth_scales, 
 
     total_loss = 0
     for d in depth_scales:
-        loss, warped, diff = one_scale(d)  # TODO use weights
+        loss, warped, diff = one_scale(d)
         total_loss += loss
         warped_results.append(warped)
         diff_results.append(diff)

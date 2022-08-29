@@ -36,7 +36,7 @@ def main():
 
     # Loaders
     train_loader = torch.utils.data.DataLoader(
-        train_ds, batch_size=args.batch_size, shuffle=args.shuffle_batches,
+        train_ds, batch_size=args.batch_size, shuffle=args.no_shuffle_batches,
         num_workers=args.workers, pin_memory=True)
     val_loader = torch.utils.data.DataLoader(
         val_ds, batch_size=args.batch_size, shuffle=False,

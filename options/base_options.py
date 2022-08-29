@@ -29,6 +29,7 @@ class BaseOptions():
         # train and eval: models hyper-parameters
         # experiment related
         self.parser.add_argument('--z_size', type=int, default=200, help='number of latent points')
+        self.parser.add_argument('--multiscale', type=int, default=1, help='the oputput of the depth decoder consists of depth maps at multiple scales or just last one downscaled')
         self.parser.add_argument('--padding_mode', type=str, choices=['zeros', 'border'], default='border',
                             help='padding mode for image warping : this is important for photometric differenciation when going outside target image.'
                                  ' zeros will null gradients outside target image.'
@@ -56,6 +57,9 @@ class BaseOptions():
 
         if self.opt.max_kitti_distance < 3:
             raise Exception("Minimum value allowed for 'max_kitti_distance' allowed is 3")
+
+        self.opt.multiscale = bool(self.opt.multiscale)
+        self.opt.fast_train = bool(self.opt.fast_train)
 
         args = vars(self.opt)
 

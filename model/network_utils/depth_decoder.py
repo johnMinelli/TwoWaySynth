@@ -10,11 +10,12 @@ from model.network_utils.layers import *
 
 
 class DepthDecoder(nn.Module):
-    def __init__(self, num_ch_enc, nz=200, scales=range(5), num_output_channels=1, dropout=False, norm_layer_type='batch', nl_layer_type='lrelu', upsample_mode='bilinear'):
+    def __init__(self, num_ch_enc, nz=200, scales=range(5), num_output_channels=1, dropout=False, refl_padding=True, norm_layer_type='batch', nl_layer_type='lrelu', upsample_mode='bilinear'):
         super(DepthDecoder, self).__init__()
         norm_layer = get_norm_layer(norm_type=norm_layer_type)
         nl_layer = get_non_linearity(layer_type=nl_layer_type)
         self.upsample_mode = upsample_mode
+        use_refl = refl_padding
 
         fc = [nn.Linear(nz, num_ch_enc[-1]*8*8)]
         if dropout: fc += [nn.Dropout(0.3)]
@@ -33,16 +34,16 @@ class DepthDecoder(nn.Module):
             # upconv_0
             num_ch_in = self.num_ch_enc[-1] if i == 4 else self.num_ch_dec[i + 1]
             num_ch_out = self.num_ch_dec[i]
-            self.convs[("upconv", i, 0)] = ConvBlock(num_ch_in, num_ch_out, norm_layer, nl_layer)
+            self.convs[("upconv", i, 0)] = ConvBlock(num_ch_in, num_ch_out, norm_layer, nl_layer, use_refl=use_refl)
 
             # upconv_1
             num_ch_in = self.num_ch_dec[i]
             num_ch_out = self.num_ch_dec[i]
             if i > 0:
-                self.convs[("upconv_s", i, 1)] = ConvBlock(num_ch_in + self.num_ch_enc[i - 1], num_ch_out, norm_layer, nl_layer)
-            self.convs[("upconv", i, 1)] = ConvBlock(num_ch_in, num_ch_out, norm_layer, nl_layer)
+                self.convs[("upconv_s", i, 1)] = ConvBlock(num_ch_in + self.num_ch_enc[i - 1], num_ch_out, norm_layer, nl_layer, use_refl=use_refl)
+            self.convs[("upconv", i, 1)] = ConvBlock(num_ch_in, num_ch_out, norm_layer, nl_layer, use_refl=use_refl)
         for s in self.scales:
-            self.convs[("dispconv", s)] = Conv3x3(self.num_ch_dec[s], self.num_output_channels)
+            self.convs[("dispconv", s)] = Conv3x3(self.num_ch_dec[s], self.num_output_channels, use_refl=use_refl)
 
         self.decoder = nn.ModuleList(list(self.convs.values()))
         self.sigmoid = nn.Sigmoid()

@@ -1,4 +1,5 @@
 import random
+import re
 
 import cv2
 from scipy.spatial.transform import Rotation as ROT
@@ -20,7 +21,7 @@ class KITTIDataset(data.Dataset):
         self.eval = eval
         self.args = args
 
-        self.use_depth = args.gt_depth is not None
+        self.use_depth = not args.no_gt_depth
         self.data_root = Path(args.data_path)
 
         self.transform = Transformer(args)
@@ -31,22 +32,23 @@ class KITTIDataset(data.Dataset):
 
         # Read split file of ids
         self.samples = []
-        self.intrinsics = np.genfromtxt(self.data_root.dirs()[0] / 'cam.txt').astype(np.float32).reshape((3,3))
-        self.intrinsics[2, 0] = 256 / 2  # being a crop, not a resize, only cx and cy should be updated
-        self.intrinsics[2, 1] = 256 / 2
-
         with open(self.datafile, 'r') as f:
             self.fileset = f.readlines()
 
         # Read intrinsics and poses
+        self.scenes_intrinsics = {}
         self.scenes_poses = {}
         self.scenes_last_sample = {}
         for scene in self.data_root.dirs():
             scene_poses = {}
             for pose in np.genfromtxt(scene/'poses.txt'):
                 scene_poses[int(pose[0])] = pose[1:].astype(np.float64).reshape((4, 4))
+            intrinsics_matrix = np.genfromtxt(scene/'cam.txt').astype(np.float32).reshape((3,3))
+            intrinsics_matrix[0, 2] = 256 / 2  # being a crop, not a resize, only cx and cy should be updated
+            intrinsics_matrix[1, 2] = 256 / 2
+            self.scenes_intrinsics[str(scene.name)] = intrinsics_matrix
             self.scenes_poses[str(scene.name)] = scene_poses
-            self.scenes_last_sample[str(scene.name)] = int(scene.files('*.png')[-1].name.stripext())
+            self.scenes_last_sample[str(scene.name)] = int(re.sub(r'_.*$', '', scene.files('*.png')[-1].name.stripext()))
 
         for i, sample_file in enumerate(self.fileset):
             sample_file = sample_file.strip()
@@ -72,7 +74,7 @@ class KITTIDataset(data.Dataset):
 
     def __getitem__(self, index):
         sample_data = self.samples[index]
-        DA = None; DB = None
+        DA = None; DB = None; DAD = None; DBD = None
 
         # create the pair
         id_source = sample_data["ref"]
@@ -85,8 +87,12 @@ class KITTIDataset(data.Dataset):
         if self.use_depth:
             DA = self.load_depth_image((self.data_root/id_source).stripext()+"_depth.png") if \
                     os.path.exists((self.data_root/id_source).stripext()+"_depth.png") else np.zeros(A.shape[:2])
+            DAD = self.load_depth_image((self.data_root/id_source).stripext()+"_dense_depth.png") if \
+                    os.path.exists((self.data_root/id_source).stripext()+"_dense_depth.png") else DA
             DB = self.load_depth_image((self.data_root/id_target).stripext()+"_depth.png") if \
                     os.path.exists((self.data_root/id_target).stripext()+"_depth.png") else np.zeros(B.shape[:2])
+            DBD = self.load_depth_image((self.data_root/id_target).stripext()+"_dense_depth.png") if \
+                    os.path.exists((self.data_root/id_target).stripext()+"_dense_depth.png") else DB
 
             # garg/eigen crop
             maskA = np.logical_and(DA >= MIN_DEPTH, DA <= MAX_DEPTH)
@@ -110,9 +116,11 @@ class KITTIDataset(data.Dataset):
         if self.use_depth:
             DA = DA[bound_top:bound_bottom, bound_left:bound_right]
             DB = DB[bound_top:bound_bottom, bound_left:bound_right]
+            DAD = DAD[bound_top:bound_bottom, bound_left:bound_right]
+            DBD = DBD[bound_top:bound_bottom, bound_left:bound_right]
 
         # intrinsics
-        I = self.intrinsics
+        I = self.scenes_intrinsics[sample_data["id_scene"]]
         poses = self.scenes_poses[sample_data["id_scene"]]
         PA = poses[sample_data["id_pose_ref"]]
         PB = poses[sample_data["id_pose_target"]]
@@ -122,8 +130,8 @@ class KITTIDataset(data.Dataset):
 
         RT = np.block([[R, T], [np.zeros((1, 3)), 1]]).astype(np.float32)
 
-        A, B, DA, DB = self.transform([A, B, DA, DB], self.train)  # as tensors; change CHW format; crop; normalize
-        return {'A': A, 'B': B, 'RT': RT, 'DA': DA, 'DB': DB, 'I': I}
+        A, B, DA, DB, DAD, DBD = self.transform([A, B, DA, DB, DAD, DBD], self.train)  # as tensors; change CHW format; crop; normalize
+        return {'A': A, 'B': B, 'RT': RT, 'DA': DA, 'DB': DB, 'DAD': DAD, 'DBD': DBD, 'I': I}
 
     def __len__(self):
         return self.dataset_size

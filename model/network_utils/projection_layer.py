@@ -127,7 +127,7 @@ def warp(img, depth, pose_mat, intrinsics, padding_mode='border', inverse=True):
         src_pixel_flow, mask = cam2pixel(cam_points, rot, tr, padding_mode, normalize=False)  # [B,H,W,2]
 
         resample = Resample2d(bilinear=True)
-        projected_img = resample(img, src_pixel_flow.transpose(1,3).contiguous())
+        projected_img = resample(img, src_pixel_flow.permute(0,3,1,2).contiguous())
 
         # fw = forward_warp()
         # projected_img = fw(img, src_pixel_flow)

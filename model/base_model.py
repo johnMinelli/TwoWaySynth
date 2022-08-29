@@ -5,6 +5,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch
 
+from model.network_utils import util
 from model.network_utils.depth_decoder import DepthDecoder
 from model.network_utils.util import get_scheduler, print_network, init_weights
 from model.network_utils.losses import depth_loss, get_depth_smoothness, photometric_reconstruction_loss, \
@@ -36,6 +37,7 @@ class BaseModel():
 
         self.train_mode = opt.isTrain
         self.backup_dir = os.path.join(opt.save_path, opt.name)
+        util.mkdirs(self.backup_dir)
 
         # Setup training devices
         if opt.gpu_ids[0] < 0 or not torch.cuda.is_available():
@@ -48,10 +50,10 @@ class BaseModel():
             self.device = torch.device("cuda")
 
         # If your system support parallelism, wrap modules with nn.DataParallel( <module> ).to(self.device)
-        self.enc = ResnetEncoder(18, nz=opt.z_size * 3, pretrained=True).to(self.device2)
-        self.dec = NvsDecoder(self.enc.num_ch_enc, nz=opt.z_size * 3).to(self.device)
-        self.depthdec = DepthDecoder(self.enc.num_ch_enc, nz=opt.z_size * 3, norm_layer_type=opt.norm_layer, nl_layer_type=opt.nl_layer, upsample_mode=opt.upsample_mode).to(self.device)
-        self.vgg = VGGPerceptualLoss().to(self.device)
+        self.enc = torch.nn.DataParallel(ResnetEncoder(18, nz=opt.z_size * 3, pretrained=True)).to(self.device)
+        self.dec = torch.nn.DataParallel(NvsDecoder(self.enc.module.num_ch_enc, nz=opt.z_size * 3)).to(self.device)
+        self.depthdec = torch.nn.DataParallel(DepthDecoder(self.enc.module.num_ch_enc, nz=opt.z_size * 3, norm_layer_type=opt.norm_layer, nl_layer_type=opt.nl_layer, upsample_mode=opt.upsample_mode)).to(self.device)
+        self.vgg = torch.nn.DataParallel(VGGPerceptualLoss()).to(self.device)
 
         self.net_dict = {'enc': self.enc,
                          'dec': self.dec,
@@ -103,12 +105,13 @@ class BaseModel():
 
     def set_input(self, input):
         self.real_A = Variable(input['A'].to(self.device))
-        self.real_depth_A = Variable(input['DA'].to(self.device))
+        # self.real_depth_A = Variable(input['DA'].to(self.device))  # available but unnecessary
+        self.real_dense_depth_A = Variable(input['DAD'].to(self.device))
         self.real_B = Variable(input['B'].to(self.device))
         self.real_depth_B = Variable(input['DB'].to(self.device))
+        # self.real_dense_depth_B = Variable(input['DBD'].to(self.device))  # available but unnecessary
         self.real_RT = Variable(input['RT'].to(self.device))
         self.intrinsics = input['I'][:,:,:3].to(self.device)
-        # self.scale_factor = input['S'].numpy()
         self.batch_size = self.real_A.size(0)
 
     def forward(self):
@@ -144,14 +147,14 @@ class BaseModel():
         output = self.dec(z, z_features)
         return [torch.tanh(out) for out in output]
 
-    def depthdecode(self, z, z_features=None, a=False):
+    def depthdecode(self, z, z_features=None, multi=False):
         outputs = self.depthdec(z, z_features)
         if self.opt.dataset == 'kitti':
-            outputs = [1 / ((torch.sigmoid(output_scale) * self.depth_scale) + self.depth_bias) for output_scale in outputs]  # predict disparity instead of depth for natural scenes
-            return outputs[-1], [F.interpolate(output, scale_factor=0.5, mode=self.opt.upsample_mode) for output in outputs] if a else [F.interpolate(outputs[-1], scale_factor=(0.5)**(i+1), mode=self.opt.upsample_mode) for i, output in enumerate(outputs)][::-1]
+            outputs = [1 / ((torch.sigmoid(output_scale) * self.depth_scale) + self.depth_bias) for output_scale in outputs]  # predict disparity instead of depth for natural scenes since high depth value
+            return outputs[-1], [F.interpolate(output, scale_factor=0.5, mode=self.opt.upsample_mode) for output in outputs] if multi else [F.interpolate(outputs[-1], scale_factor=(0.5)**(i+1), mode=self.opt.upsample_mode) for i, output in enumerate(outputs)][::-1]
         elif self.opt.dataset == 'shapenet':
-            outputs = [(torch.tanh(output_scale) * self.depth_scale) + self.depth_bias for output_scale in outputs]  # here do inversion if needed
-            return outputs[-1], [F.interpolate(output, scale_factor=0.5, mode=self.opt.upsample_mode) for output in outputs] if a else [F.interpolate(outputs[-1], scale_factor=(0.5)**(i+1), mode=self.opt.upsample_mode) for i, output in enumerate(outputs)][::-1]
+            outputs = [(torch.tanh(output_scale) * self.depth_scale) + self.depth_bias for output_scale in outputs]
+            return outputs[-1], [F.interpolate(output, scale_factor=0.5, mode=self.opt.upsample_mode) for output in outputs] if multi else [F.interpolate(outputs[-1], scale_factor=(0.5)**(i+1), mode=self.opt.upsample_mode) for i, output in enumerate(outputs)][::-1]
 
     def backward_G(self):
 
@@ -166,8 +169,7 @@ class BaseModel():
         self.vgg_loss = self.vgg(self.fake_B, self.real_B)
 
         # Image with depth quality
-        self.loss_depth_smooth = get_depth_smoothness(self.depth_b_skip, self.real_B) \
-                                  + get_depth_smoothness(self.depth_a_skip, self.real_A)
+        self.loss_depth_smooth = get_depth_smoothness(self.depth_b_skip, self.real_B) + get_depth_smoothness(self.depth_a_skip, self.real_A)
 
         # Multiscale transformation/warping loss for depth quality: to supervise the warped scales
         self.loss_warp, warped, diff = photometric_reconstruction_loss(self.real_B, self.real_A, self.intrinsics, self.depth_scales_b+[self.depth_b_skip], self.real_RT)
@@ -180,7 +182,8 @@ class BaseModel():
         # Consistency loss to improve latent warped
         # self.loss_latent = F.l1_loss(self.z_a2b, self.z_b)
 
-        self.loss_G = (self.loss_reco+self.loss_warp) * self.opt.lambda_recon  # 10.0
+        self.loss_G = self.loss_reco * self.opt.lambda_recon  # 10.0
+        self.loss_G += self.loss_warp * self.opt.lambda_warp  # 10.0
         self.loss_G += self.loss_skip * self.opt.lambda_consistency  # 1.0
         self.loss_G += self.vgg_loss * self.opt.lambda_vgg  # 1.0
         self.loss_G += self.loss_depth_smooth * self.opt.lambda_smooth  # 10.0
@@ -239,7 +242,7 @@ class BaseModel():
                             'fake_B': tensor2im(self.fake_B.data[0]),
                             # 'fake_direct_B': tensor2im(self.fake_direct_B.data[0]),
                             'fake_B_direct_map': tensor2im(self.fake_B_direct_map.data[0]),
-                            'depth_B_unskip_warped': tensor2im(self.depth_a2b_unskip.data[0]),
+                            # 'depth_B_unskip_warped': tensor2im(self.depth_a2b_unskip.data[0]),
                             'depth_B_skip_warped': tensor2im(self.depth_a2b_skip.data[0]),
                             # 'depth_B_unskip': tensor2im(self.depth_b_unskip.data[0]),
                             'depth_B_skip': tensor2im(self.depth_b_skip.data[0]),

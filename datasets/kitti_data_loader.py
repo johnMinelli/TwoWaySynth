@@ -25,10 +25,7 @@ class KITTIDataset(data.Dataset):
         self.data_root = Path(args.data_path)
 
         self.transform = Transformer(args)
-        if train is True:
-            self.datafile = args.train_file
-        else:
-            self.datafile = args.valid_file
+        self.datafile = args.train_file if train else args.valid_file if valid else args.test_file
 
         # Read split file of ids
         self.samples = []
@@ -39,6 +36,7 @@ class KITTIDataset(data.Dataset):
         self.scenes_intrinsics = {}
         self.scenes_poses = {}
         self.scenes_last_sample = {}
+        filter = '*_depth.png' if self.use_depth else '*.png'
         for scene in self.data_root.dirs():
             scene_poses = {}
             for pose in np.genfromtxt(scene/'poses.txt'):
@@ -48,25 +46,36 @@ class KITTIDataset(data.Dataset):
             intrinsics_matrix[1, 2] = 256 / 2
             self.scenes_intrinsics[str(scene.name)] = intrinsics_matrix
             self.scenes_poses[str(scene.name)] = scene_poses
-            self.scenes_last_sample[str(scene.name)] = int(re.sub(r'_.*$', '', scene.files('*.png')[-1].name.stripext()))
+            self.scenes_last_sample[str(scene.name)] = int(re.sub(r'_.*$', '', sorted(scene.files(filter))[-1].name.stripext()))
 
-        for i, sample_file in enumerate(self.fileset):
-            sample_file = sample_file.strip()
-            if not os.path.exists(self.data_root/sample_file): continue
-            scene = str(Path(sample_file).dirname().name)
+        if self.eval:
+            self.pairs = self.fileset
+            for pair_ids in self.pairs:
+                sample_file, tgt_file = pair_ids.strip().split(" ")
+                scene = str(Path(sample_file).dirname().name)
+                id_ref = int(Path(sample_file).name.stripext())
+                id_tgt = int(Path(tgt_file).name.stripext())
 
-            id_ref = int(Path(sample_file).name.stripext())
-            last = self.scenes_last_sample[scene]
-            if id_ref+3 >= last: continue
+                sample = {'id_scene': scene, 'id_pose_ref': id_ref, 'id_pose_target': id_tgt, 'ref': sample_file, 'target': tgt_file}
+                self.samples.append(sample)
+        else:
+            for i, sample_file in enumerate(self.fileset):
+                sample_file = sample_file.strip()
+                if not os.path.exists(self.data_root/sample_file):
+                    continue
+                scene = str(Path(sample_file).dirname().name)
 
-            id_tgt = np.random.randint(id_ref+3, min(id_ref+self.args.max_kitti_distance+1, last))  # random target
-            tgt_file = sample_file.replace(str(id_ref), str(id_tgt))
-            if not os.path.exists(self.data_root/tgt_file): continue
+                id_ref = int(Path(sample_file).name.stripext())
+                last = self.scenes_last_sample[scene]
+                if id_ref+1 >= last: continue
 
-            # Make samples for sampled image
-            sample = {'id_scene': scene, 'id_pose_ref': id_ref, 'id_pose_target': id_tgt,
-                      'ref': sample_file, 'target': tgt_file}
-            self.samples.append(sample)
+                id_tgt = np.random.randint(id_ref+1, min(id_ref+self.args.max_kitti_distance+1, last))  # random target
+                tgt_file = str(id_tgt).join(sample_file.rsplit((str(id_ref) if len(str(id_ref)) == len(str(id_tgt)) else '0'+str(id_ref)), 1))
+                if not os.path.exists(self.data_root/tgt_file): continue
+
+                # Make samples for sampled image
+                sample = {'id_scene': scene, 'id_pose_ref': id_ref, 'id_pose_target': id_tgt, 'ref': sample_file, 'target': tgt_file}
+                self.samples.append(sample)
 
         random.shuffle(self.samples)  # to handle data storage ordering, however seed is fixed
         self.dataset_size = len(self.samples)
@@ -74,7 +83,7 @@ class KITTIDataset(data.Dataset):
 
     def __getitem__(self, index):
         sample_data = self.samples[index]
-        DA = None; DB = None; DAD = None; DBD = None
+        DA = None; DB = None; # DAD = None; DBD = None
 
         # create the pair
         id_source = sample_data["ref"]
@@ -87,12 +96,12 @@ class KITTIDataset(data.Dataset):
         if self.use_depth:
             DA = self.load_depth_image((self.data_root/id_source).stripext()+"_depth.png") if \
                     os.path.exists((self.data_root/id_source).stripext()+"_depth.png") else np.zeros(A.shape[:2])
-            DAD = self.load_depth_image((self.data_root/id_source).stripext()+"_dense_depth.png") if \
-                    os.path.exists((self.data_root/id_source).stripext()+"_dense_depth.png") else DA
+            # DAD = self.load_depth_image((self.data_root/id_source).stripext()+"_dense_depth.png") if \
+            #         os.path.exists((self.data_root/id_source).stripext()+"_dense_depth.png") else DA
             DB = self.load_depth_image((self.data_root/id_target).stripext()+"_depth.png") if \
                     os.path.exists((self.data_root/id_target).stripext()+"_depth.png") else np.zeros(B.shape[:2])
-            DBD = self.load_depth_image((self.data_root/id_target).stripext()+"_dense_depth.png") if \
-                    os.path.exists((self.data_root/id_target).stripext()+"_dense_depth.png") else DB
+            # DBD = self.load_depth_image((self.data_root/id_target).stripext()+"_dense_depth.png") if \
+            #         os.path.exists((self.data_root/id_target).stripext()+"_dense_depth.png") else DB
 
             # garg/eigen crop
             maskA = np.logical_and(DA >= MIN_DEPTH, DA <= MAX_DEPTH)
@@ -116,8 +125,8 @@ class KITTIDataset(data.Dataset):
         if self.use_depth:
             DA = DA[bound_top:bound_bottom, bound_left:bound_right]
             DB = DB[bound_top:bound_bottom, bound_left:bound_right]
-            DAD = DAD[bound_top:bound_bottom, bound_left:bound_right]
-            DBD = DBD[bound_top:bound_bottom, bound_left:bound_right]
+            # DAD = DAD[bound_top:bound_bottom, bound_left:bound_right]
+            # DBD = DBD[bound_top:bound_bottom, bound_left:bound_right]
 
         # intrinsics
         I = self.scenes_intrinsics[sample_data["id_scene"]]
@@ -126,12 +135,12 @@ class KITTIDataset(data.Dataset):
         PB = poses[sample_data["id_pose_target"]]
 
         R = PA[:, :3].T @ PB[:, :3]
-        T = PA[:, :3].T.dot(PB[:, 3:] - PA[:, 3:])
+        T = PA[:, :3].T.dot(PB[:, 3:] - PA[:, 3:]) / 50.
 
         RT = np.block([[R, T], [np.zeros((1, 3)), 1]]).astype(np.float32)
 
-        A, B, DA, DB, DAD, DBD = self.transform([A, B, DA, DB, DAD, DBD], self.train)  # as tensors; change CHW format; crop; normalize
-        return {'A': A, 'B': B, 'RT': RT, 'DA': DA, 'DB': DB, 'DAD': DAD, 'DBD': DBD, 'I': I}
+        A, B, DA, DB = self.transform([A, B, DA, DB], self.train)  # as tensors; change CHW format; crop; normalize
+        return {'A': A, 'B': B, 'RT': RT, 'DA': DA, 'DB': DB, 'I': I}  # DAD only in visualization, DB only for metrics
 
     def __len__(self):
         return self.dataset_size

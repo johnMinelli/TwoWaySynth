@@ -26,14 +26,11 @@ class ShapeNetDataset(data.Dataset):
         self.positions = AZ_RANGE*EL_RANGE
 
         self.transform = Transformer(args)
-        if train is True:
-            self.datafile = args.train_file
-        else:
-            self.datafile = args.valid_file
+        self.datafile = args.train_file if train else args.valid_file if valid else args.test_file
 
         # Read split file of ids
         self.samples = []
-        self.intrinsics = np.genfromtxt(self.data_root / '..' / '..' / 'camera_settings' / 'cam_K' / 'cam_K.txt').astype(np.float32).reshape((3,3))
+        self.intrinsics = np.genfromtxt(self.data_root / '..' / 'camera_settings' / 'cam_K' / 'cam_K.txt').astype(np.float32).reshape((3,3))
         self.intrinsics[:-1, :] = self.intrinsics[:-1, :] / 2  # halved since the images are resized from 512 to 256
 
         with open(self.datafile, 'r') as f:
@@ -42,7 +39,7 @@ class ShapeNetDataset(data.Dataset):
         # Read intrinsics and poses
         poses = []
         for i in range(self.positions):
-            poses.append(np.genfromtxt(self.data_root / '..' / '..' / 'camera_settings' / 'cam_RT' / 'cam_RT_{:03d}.txt'.format(i+1)).astype(np.float32).reshape((3,4)))
+            poses.append(np.genfromtxt(self.data_root / '..' / 'camera_settings' / 'cam_RT' / 'cam_RT_{:03d}.txt'.format(i+1)).astype(np.float32).reshape((3,4)))
 
         if self.eval:
             self.pairs = self.ids

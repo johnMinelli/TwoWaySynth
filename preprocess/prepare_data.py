@@ -60,7 +60,8 @@ def main():
                                      get_pose=args.with_pose,
                                      depth_size_ratio=args.depth_size_ratio)
 
-    # if args.dataset == 'shapenet':  # discontinued since the dataset has been rendered properly from scratch
+    if args.dataset == 'shapenet':  # discontinued since the dataset has been rendered properly from scratch
+        print("No need to prepare the data for ShapeNet dataset if you use the provided data from the source.")
     #     from shapenet_raw_loader import ShapeNetRawLoader
     #     data_loader = ShapeNetRawLoader(args.data_path,
     #                                     img_height=args.height,

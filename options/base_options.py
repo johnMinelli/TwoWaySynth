@@ -25,11 +25,11 @@ class BaseOptions():
         # data loading related
         self.parser.add_argument('--data_path', type=str, required=True, help='path to dataset files')
         self.parser.add_argument("--dataset", type=str, default='kitti', choices=["kitti", "shapenet"])
+        self.parser.add_argument("--no_gt_depth", action='store_true', help="when gt depth is not available (the gt depth is needed only for metrics computation)")
 
         # train and eval: models hyper-parameters
         # experiment related
         self.parser.add_argument('--z_size', type=int, default=200, help='number of latent points')
-        self.parser.add_argument('--multiscale', type=int, default=1, help='the oputput of the depth decoder consists of depth maps at multiple scales or just last one downscaled')
         self.parser.add_argument('--padding_mode', type=str, choices=['zeros', 'border'], default='border',
                             help='padding mode for image warping : this is important for photometric differenciation when going outside target image.'
                                  ' zeros will null gradients outside target image.'
@@ -52,14 +52,14 @@ class BaseOptions():
             if id >= 0:
                 self.opt.gpu_ids.append(id)
 
-        if self.opt.max_az_distance < 1:
-            raise Exception("Minimum value allowed for 'max_az_distance' allowed is 1")
+        if self.isTrain:
+            if self.opt.max_az_distance < 1:
+                raise Exception("Minimum value allowed for 'max_az_distance' allowed is 1")
 
-        if self.opt.max_kitti_distance < 3:
-            raise Exception("Minimum value allowed for 'max_kitti_distance' allowed is 3")
+            if self.opt.max_kitti_distance < 1:
+                raise Exception("Minimum value allowed for 'max_kitti_distance' allowed is 1")
 
-        self.opt.multiscale = bool(self.opt.multiscale)
-        self.opt.fast_train = bool(self.opt.fast_train)
+            self.opt.rand_el_distance = bool(self.opt.rand_el_distance)
 
         args = vars(self.opt)
 

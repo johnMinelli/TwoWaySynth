@@ -102,6 +102,7 @@ def compute_depth_metrics(depth_gt, depth_pred, min_depth=1e-3, max_depth=80):
     depth_gt = depth_gt[mask]
     depth_pred = depth_pred[mask]
     depth_pred *= torch.median(depth_gt) / torch.median(depth_pred)
+    depth_pred = torch.clamp(depth_pred, min=min_depth, max=max_depth)
 
     depth_errors = _compute_depth_errors(depth_gt, depth_pred)
 

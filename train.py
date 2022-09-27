@@ -46,11 +46,12 @@ def main():
 
     visualizer = Visualizer(args)
 
+    run = None
     if args.tensorboard:
         tb_writer = SummaryWriter()
     else: tb_writer = None
     if args.wandb:
-        wandb.init(project="TwoWaySinth", entity="johnminelli")
+        run = wandb.init(project="TwoWaySinth", entity="johnminelli", reinit=True)
         if args.sweep_id is not None: args.__dict__.update(wandb.config)
         wandb.config = args
         wandb.log({"params": wandb.Table(data=pd.DataFrame({k: [v] for k, v in vars(args).items()}))})
@@ -58,9 +59,6 @@ def main():
     valid_logger = Logger(mode="valid", n_epochs=args.epochs, data_size=len(val_loader), terminal_print_freq=-1, display_freq=args.display_freq, tensorboard=tb_writer, visualizer=visualizer, wand=args.wandb)
 
     for epoch in range(model.start_epoch, args.epochs):
-        if not model.nvs_mode and (model.start_epoch > 0 or (epoch > 0 and ((args.validate and valid_metrics[3] < 0.055) or (not args.validate and train_metrics[3] < 0.055)))):
-            model.nvs_mode = True
-
         # train for one epoch
         train_time, train_loss, train_metrics = run_model(train_loader, model, train_logger.epoch_start(epoch))
 
@@ -80,11 +78,12 @@ def main():
                 best_result = ref_metric
             elif ref_metric < best_result:
                 best_result = ref_metric
-                model.save(epoch, os.path.join(args.save_path, args.name))
+            model.save(epoch, os.path.join(args.save_path, args.name))
 
         train_logger.epoch_stop()
         model.update_learning_rate()
     train_logger.progress_bar.finish()
+    if run is not None: run.finish()
     # final save
     model.save(args.epochs, os.path.join(args.save_path, args.name))
 
@@ -104,7 +103,7 @@ def run_model(dataloader, model, logger):
         model.set_input(data)
         model.forward()
 
-        logger.display_results(i, model.get_current_visuals())
+        logger.display_results(i, model.get_current_visuals)
 
         model.optimize_parameters()
 

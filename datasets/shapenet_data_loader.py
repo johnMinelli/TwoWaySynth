@@ -1,7 +1,7 @@
 import random
 import os
 
-os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 import cv2
 import numpy as np
 import torch.utils.data as data
@@ -11,8 +11,8 @@ from path import Path
 from datasets.transform_list import RandomCropNumpy, EnhancedCompose, RandomColor, RandomHorizontalFlip, ArrayToTensor, \
     Normalize, Resize
 
-EL_RANGE = 4  # different positions: dataset dependant
-AZ_RANGE = 18  # different positions: dataset dependant
+EL_RANGE = 4  # different elevation positions: is dataset dependant
+AZ_RANGE = 18  # different azimuth positions: is dataset dependant
 
 class ShapeNetDataset(data.Dataset):
     def __init__(self, args, train, valid, eval):
@@ -45,14 +45,10 @@ class ShapeNetDataset(data.Dataset):
             self.pairs = self.ids
             scene_id = None
             for pair_ids in self.pairs:
-                id_s, id_t = pair_ids.split(" ")
-                scene_id,b,c = id_s.split("_")
-                id_s = (int(b)/20*EL_RANGE) + (int(c)/10) + 1
-                _,b,c = id_t.split("_")
-                id_t = (int(b)/20*EL_RANGE) + (int(c)/10) + 1
-                scene_path = self.data_root / scene_id
-                sample = {'pose_ref': poses[id_s], 'pose_target': poses[id_t],
-                          'ref': scene_path/'color_{:03d}.png'.format(id_s), 'target': scene_path/'color_{:03d}.png'.format(id_t)}
+                ref, tgt = pair_ids.split(" ")
+
+                sample = {'pose_ref': poses[int(ref[-7:-4])-1], 'pose_target': poses[int(tgt[-7:-4])-1],
+                          'ref': self.data_root / ref, 'target': self.data_root / tgt}
                 self.samples.append(sample)
         else:
             for scene_id in self.ids:
@@ -60,7 +56,7 @@ class ShapeNetDataset(data.Dataset):
                 scene_path = self.data_root/scene_id
 
                 # Make samples for sampled object
-                for i in range(0, self.positions-(self.args.max_az_distance*EL_RANGE), 3):
+                for i in np.random.choice(list(range(self.positions-(self.args.max_az_distance*EL_RANGE))), 16):
                     view_shift = ((((i//EL_RANGE) +  # in range [0, AZ_RANGE]
                                  np.random.randint(1, self.args.max_az_distance+1))*EL_RANGE) +  # random az distance
                                  np.random.randint(0, EL_RANGE) if self.args.rand_el_distance else i % 4)  # optional random el distance
@@ -95,7 +91,7 @@ class ShapeNetDataset(data.Dataset):
 
         T = np.array([0, 0, 2]).reshape((3, 1))
         R = PA[:,:3].T @ PB[:,:3]
-        # R = np.linalg.inv(np.linalg.inv(PB[:,:3]) @ PA[:,:3])  # equivalent
+        # R = np.linalg.inv(np.linalg.inv(PB[:,:3]) @ PA[:,:3])  # this is equivalent to the one above
 
         T = -R.dot(T)+T
         RT = np.block([[R, T], [np.zeros((1, 3)), 1]]).astype(np.float32)

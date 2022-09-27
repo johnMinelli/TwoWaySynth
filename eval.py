@@ -1,6 +1,7 @@
 import torch
 import torch.optim
 import torch.utils.data
+from tqdm import tqdm
 
 from datasets.dataset_loader import CreateDataset
 from logger.logger import AverageMeter
@@ -33,7 +34,7 @@ def main():
 
     model = BaseModel(args)
     model.switch_mode('eval')
-    for i, data in enumerate(data_loader):
+    for i, data in enumerate(tqdm(data_loader)):
         current_batch_size = data["A"].size(0)
 
         model.set_input(data)
@@ -42,10 +43,12 @@ def main():
         metrics.update(list(model.get_current_metrics().items()), current_batch_size)
 
         # to save images
-        # visualizer.display_current_results(model.get_current_visuals(), i,  list(model.get_current_metrics().items())[1][1]>0.98)
-        # visualizer.reset()
+        visualizer.display_current_results(model.get_current_visuals(), i,  False)
+        visualizer.reset()
+        # if i==5000: break
     avg_metrics = metrics.avg
     print(' * Avg Metrics : ' + ', '.join(["{}: {:.3f}".format(n, v) for n, v in zip(metrics.names, avg_metrics)]))
+
 
 if __name__ == '__main__':
     main()

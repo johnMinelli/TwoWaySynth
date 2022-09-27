@@ -4,7 +4,6 @@ import re
 import cv2
 from scipy.spatial.transform import Rotation as ROT
 from datasets.transform_list import RandomCropNumpy, EnhancedCompose, RandomColor, RandomHorizontalFlip, ArrayToTensor, Normalize
-from torchvision import transforms
 import os
 import torch.utils.data as data
 from PIL import Image
@@ -83,7 +82,7 @@ class KITTIDataset(data.Dataset):
 
     def __getitem__(self, index):
         sample_data = self.samples[index]
-        DA = None; DB = None; # DAD = None; DBD = None
+        DA = None; DB = None  # ; DAD = None; DBD = None
 
         # create the pair
         id_source = sample_data["ref"]
@@ -135,7 +134,7 @@ class KITTIDataset(data.Dataset):
         PB = poses[sample_data["id_pose_target"]]
 
         R = PA[:, :3].T @ PB[:, :3]
-        T = PA[:, :3].T.dot(PB[:, 3:] - PA[:, 3:]) / 50.
+        T = PA[:, :3].T.dot(PB[:, 3:] - PA[:, 3:]) / 50.  # 50 to reduce the distance of the camera. This make the depth predictions in range [0,80]/50 and the results are better
 
         RT = np.block([[R, T], [np.zeros((1, 3)), 1]]).astype(np.float32)
 

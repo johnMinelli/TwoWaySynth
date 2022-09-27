@@ -2,9 +2,10 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
+# from model.network_utils import softsplat
 # from Forward_Warp import forward_warp
 
-from model.network_utils.resample2d_package.resample2d import Resample2d
+# from model.network_utils.resample2d_package.resample2d import Resample2d
 
 pixel_coords = None
 
@@ -14,7 +15,7 @@ def set_id_grid(depth):
     j_range = torch.arange(0, w).view(1, 1, w).expand(1,h,w).type_as(depth)  # [1, H, W]
     ones = torch.ones(1,h,w).type_as(depth)
 
-    return torch.stack((j_range, i_range, ones), dim=1)  # [1, 3, H, W]
+    return torch.stack((j_range, i_range, ones), dim=1)  # [1, 3, H, W]  # not so sure... anyway h=w
 
 def check_sizes(input, input_name, expected):
     condition = [input.ndimension() == len(expected)]
@@ -85,7 +86,7 @@ def cam2pixel(cam, proj_c2p_rot, proj_c2p_tr, padding_mode='zeros', normalize=Tr
     return pixel_coords.reshape(b,h,w,2), mask.reshape(b,3,h,w)
 
 
-def warp(img, depth, pose_mat, intrinsics, padding_mode='border', inverse=True):
+def inverse_warp(img, depth, pose_mat, intrinsics, padding_mode='border'):
     global pixel_coords
     """
     Inverse warp a source image to the target image plane.
@@ -111,28 +112,18 @@ def warp(img, depth, pose_mat, intrinsics, padding_mode='border', inverse=True):
 
     if (pixel_coords is None) or pixel_coords.size(2) < depth.size(1):
         pixel_coords = set_id_grid(depth)
-    input = pixel_coords if inverse else torch.ones_like(depth).unsqueeze(1).expand((batch_size, 3, img_height, img_width))
+    input = pixel_coords
 
     cam_points = pixel2cam(input, depth, torch.inverse(intrinsics))  # [B,3,H,W]
     # Get projection matrix for tgt camera frame to source pixel frame
-    proj_cam_to_src_pixel = intrinsics.bmm((pose_mat if inverse else pose_mat.inverse())[:,:3,:])  # [B, 3, 4]
-    rot, tr = proj_cam_to_src_pixel[:,:,:3], proj_cam_to_src_pixel[:,:,-1:]
+    proj_cam_to_src_pixel = intrinsics.bmm(pose_mat[:, :3, :])  # [B, 3, 4]
+    rot, tr = proj_cam_to_src_pixel[:, :, :3], proj_cam_to_src_pixel[:, :, -1:]
 
+    src_pixel_coords, mask = cam2pixel(cam_points, rot, tr, padding_mode, normalize=True)  # [B,H,W,2]
 
-    if inverse:
-        src_pixel_coords, mask = cam2pixel(cam_points, rot, tr, padding_mode, normalize=True)  # [B,H,W,2]
+    projected_img = F.grid_sample(img, src_pixel_coords, padding_mode=padding_mode, align_corners=False)
 
-        projected_img = F.grid_sample(img, src_pixel_coords, padding_mode=padding_mode, align_corners=False)
-    else:
-        src_pixel_flow, mask = cam2pixel(cam_points, rot, tr, padding_mode, normalize=False)  # [B,H,W,2]
-
-        resample = Resample2d(bilinear=True)
-        projected_img = resample(img, src_pixel_flow.permute(0,3,1,2).contiguous())
-
-        # fw = forward_warp()
-        # projected_img = fw(img, src_pixel_flow)
-
-    return projected_img, src_pixel_coords if inverse else src_pixel_flow, mask
+    return projected_img, src_pixel_coords, mask
 
 
 def transform_code(z, RT, object_centric=False):

@@ -3,32 +3,32 @@ from __future__ import division
 import torch
 import torchvision
 import torch.nn.functional as F
+from torchvision.models import VGG16_Weights
 
 from model.network_utils.metrics import ssim
-from model.network_utils.projection_layer import warp
+from model.network_utils.projection_layer import inverse_warp
 
 
 # Depth loss took and adapted from SfMLearner - "Unsupervised Learning of Depth and Ego-Motion from Video"
 def photometric_reconstruction_loss(tgt_img, ref_img, intrinsics, depth_scales, pose):
     def one_scale(depth):
-
+        depth = torch.clamp(depth, min=1e-3, max=80)
         b, _, h, w = depth.size()
         downscale = tgt_img.size(2)/h
-        weight = 1 if downscale == 1 else 0.6
         # rescale and normalize images which are in [-1,1]
         tgt_img_scaled = F.interpolate(tgt_img * 0.5 + 0.5, (h, w), mode='area')
         ref_img_scaled = F.interpolate(ref_img * 0.5 + 0.5, (h, w), mode='area')
         intrinsics_scaled = torch.cat((intrinsics[:, 0:2]/downscale, intrinsics[:, 2:]), dim=1)
 
-        ref_img_warped, _, valid_points = warp(ref_img_scaled, depth[:,0], pose, intrinsics_scaled)
+        ref_img_warped, _, valid_points = inverse_warp(ref_img_scaled, depth, pose, intrinsics_scaled)
 
         # consider the difference between (only) projected points respect to the target image
         diff = ((tgt_img_scaled - ref_img_warped) * (1-valid_points.float()))
         # mask the background (black)
-        reconstruction_loss = diff[tgt_img_scaled>0].abs().mean() * weight
+        reconstruction_loss = diff[tgt_img_scaled>0].abs().mean()
         ### upsample depth not images
         # b, _, h, w = tgt_img.size()
-        # ref_img_warped, _, valid_points = inverse_warp(ref_img, F.upsample(depth, (h, w), mode="bilinear", align_corners=False), pose, intrinsics)
+        # ref_img_warped, _, valid_points = inverse_warp(ref_img, F.upsample(depth, (h, w), mode="bilinear", align_corners=True), pose, intrinsics)
         # diff = ((tgt_img - ref_img_warped) * (1 - valid_points.float()))
         # reconstruction_loss = diff[tgt_img > 0].abs().mean()
         return reconstruction_loss, ref_img_warped, diff
@@ -92,10 +92,10 @@ class VGGPerceptualLoss(torch.nn.Module):
     def __init__(self, resize=True):
         super(VGGPerceptualLoss, self).__init__()
         blocks = []
-        blocks.append(torchvision.models.vgg16(pretrained=True).features[:4].eval())
-        blocks.append(torchvision.models.vgg16(pretrained=True).features[4:9].eval())
-        blocks.append(torchvision.models.vgg16(pretrained=True).features[9:16].eval())
-        blocks.append(torchvision.models.vgg16(pretrained=True).features[16:23].eval())
+        blocks.append(torchvision.models.vgg16(weights=VGG16_Weights.IMAGENET1K_V1).features[:4].eval())
+        blocks.append(torchvision.models.vgg16(weights=VGG16_Weights.IMAGENET1K_V1).features[4:9].eval())
+        blocks.append(torchvision.models.vgg16(weights=VGG16_Weights.IMAGENET1K_V1).features[9:16].eval())
+        blocks.append(torchvision.models.vgg16(weights=VGG16_Weights.IMAGENET1K_V1).features[16:23].eval())
         for bl in blocks:
             for p in bl:
                 p.requires_grad = False

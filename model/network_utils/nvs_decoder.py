@@ -50,14 +50,14 @@ class NvsDecoder(nn.Module):
     def forward(self, input_encoded, input_features):
         self.outputs = []
 
-        x = self.fc(input_encoded).view(input_encoded.size(0), self.num_ch_enc[-1], self.final_dim, self.final_dim)  # MOD here I used a FC instead of ConvTranspose2d(in, out, kernel_size=4, stride=2, padding=1) till a 8x8 dim
+        x = self.fc(input_encoded).view(input_encoded.size(0), self.num_ch_enc[-1], self.final_dim, self.final_dim)
 
         for i in range(4, -1, -1):
             x = self.convs[("upconv", i, 0)](x)
             x = [upsample(x, mode=self.upsample_mode)]
             if i > 0:
                 x += [input_features[i-1]]
-            x = torch.cat(x, 1)                 # MOD here i don't use the mid output scales also as skip connections. This way it would be cat([layer(n,256,256), outpred(3,256,256), skipfeature(n,256,256)])
+            x = torch.cat(x, 1)
             x = self.convs[("upconv", i, 1)](x)
             if i in self.scales:
                 self.outputs += [self.convs[("predconv", i)](x)]

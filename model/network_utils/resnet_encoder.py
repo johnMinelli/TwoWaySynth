@@ -5,6 +5,8 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 import torch.nn as nn
 import torchvision.models as models
+from torchvision.models import ResNet18_Weights
+
 
 class ResnetEncoder(nn.Module):
     """Pytorch module for a resnet encoder
@@ -23,7 +25,7 @@ class ResnetEncoder(nn.Module):
         if num_layers not in resnets:
             raise ValueError("{} is not a valid number of resnet layers".format(num_layers))
 
-        self.encoder = resnets[num_layers](pretrained)
+        self.encoder = resnets[num_layers](weights=ResNet18_Weights.DEFAULT if pretrained else None)
 
         if num_layers > 34:
             self.num_ch_enc[1:] *= 4

@@ -122,14 +122,14 @@ class BaseModel():
         # self.fake_B_direct_map = self.warp_features([self.real_A], [self.real_depth_A], inverse=False)[0]  # for visual reference
 
         # obtain features of A at B by warping via direct mapping
-        self.z_features_a2b_direct_map = self.warp_features(self.z_features_a, self.depth_scales_a[::-1], inverse=False)
+        self.z_features_a2b_direct_map = self.warp_features(self.z_features_a, self.depth_scales_a[::-1]+[self.depth_scales_a[0]], inverse=False)
         # transform latent of A to B
         self.z_a2b = self.transform(self.z_a)  # [b,nz*3]
         # obtain the depth respect B view
         self.depth_a2b, self.depth_scales_a2b = self.depthdecode(self.z_a2b, self.z_features_a2b_direct_map)  # [max res], [features low to high res]
 
         # again warp 'z_features_a' with better 'depth_scales_a2b' to obtain features for nvs skip connections
-        self.z_features_a2b = self.warp_features(self.z_features_a, self.depth_scales_a2b[::-1])
+        self.z_features_a2b = self.warp_features(self.z_features_a, self.depth_scales_a2b[::-1]+[self.depth_scales_a2b[0]])
         self.fake_B3, self.fake_B2, self.fake_B1, self.fake_B = self.decode(self.z_a2b, self.z_features_a2b)
 
         # self.fake_direct_B3, self.fake_direct_B2, self.fake_direct_B1, self.fake_direct_B = self.decode(self.z_b, self.z_features_b)  # for loss

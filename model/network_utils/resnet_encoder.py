@@ -3,6 +3,7 @@
 from __future__ import absolute_import, division, print_function
 
 import numpy as np
+import torch
 import torch.nn as nn
 import torchvision.models as models
 from torchvision.models import ResNet18_Weights
@@ -15,6 +16,8 @@ class ResnetEncoder(nn.Module):
         super(ResnetEncoder, self).__init__()
 
         self.num_ch_enc = np.array([64, 64, 128, 256, 512])
+        # add bottleneck ch size
+        self.num_ch_enc = np.append(self.num_ch_enc, int(self.num_ch_enc[-1]/2))  # half used as feature and half compressed with fc
 
         resnets = {18: models.resnet18,
                    34: models.resnet34,
@@ -30,7 +33,8 @@ class ResnetEncoder(nn.Module):
         if num_layers > 34:
             self.num_ch_enc[1:] *= 4
         final_dim = np.exp2(np.log2(self.num_ch_enc.max())-np.log2(self.num_ch_enc.min())).astype(np.int)
-        fc = [nn.Linear(self.num_ch_enc[-1]*final_dim*final_dim, nz)]  # 512*8*8
+        fc = [nn.Linear(self.num_ch_enc[-1]*final_dim*final_dim, nz)]  # 256*8*8
+
         if dropout: fc += [nn.Dropout(0.3)]
         self.fc = nn.Sequential(*fc)
 
@@ -50,6 +54,6 @@ class ResnetEncoder(nn.Module):
         self.features.append(self.encoder.layer2(self.features[-1]))
         self.features.append(self.encoder.layer3(self.features[-1]))
         self.features.append(self.encoder.layer4(self.features[-1]))
+        self.features += torch.split(self.features[-1], int(self.features[-1].size(1)-self.num_ch_enc[-1]), dim=1)  # ch_last feature - ch_bottleneck = 512 - 256
 
         return self.fc(self.features[-1].view(input_image.size(0),-1)), self.features[:-1]
-        # MOD here FC instead of MaxPool: I don't want to classify, the details must be maintained.

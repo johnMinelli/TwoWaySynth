@@ -16,16 +16,16 @@ class DepthDecoder(nn.Module):
         nl_layer = get_non_linearity(layer_type=nl_layer_type)
         self.upsample_mode = upsample_mode
 
-        fc = [nn.Linear(nz, num_ch_enc[-1]*8*8)]
+        self.num_output_channels = num_output_channels
+        self.scales = scales
+        self.num_ch_enc, self.num_ch_bottleneck = num_ch_enc[:-1], num_ch_enc[-1]
+        self.num_ch_dec = np.array([16, 32, 64, 128, 256])
+        self.final_dim = np.exp2(np.log2(self.num_ch_enc.max())-np.log2(self.num_ch_enc.min())).astype(np.int)
+
+        fc = [nn.Linear(nz, self.num_ch_bottleneck*8*8)]
         if dropout: fc += [nn.Dropout(0.3)]
         fc += [nl_layer()]
         self.fc = nn.Sequential(*fc)
-
-        self.num_output_channels = num_output_channels
-        self.scales = scales
-        self.num_ch_enc = num_ch_enc
-        self.num_ch_dec = np.array([16, 32, 64, 128, 256])
-        self.final_dim = np.exp2(np.log2(self.num_ch_enc.max())-np.log2(self.num_ch_enc.min())).astype(np.int)
 
         # decoder
         self.convs = OrderedDict()
@@ -51,7 +51,8 @@ class DepthDecoder(nn.Module):
         self.outputs = []
         use_skips = input_features is not None and len(input_features) > 0
 
-        x = self.fc(input_encoded).view(input_encoded.size(0), self.num_ch_enc[-1], self.final_dim, self.final_dim)
+        x = self.fc(input_encoded).view(input_encoded.size(0), self.num_ch_bottleneck, self.final_dim, self.final_dim)
+        x = torch.cat([x, input_features[-1]], 1)
 
         for i in range(4, -1, -1):
             x = self.convs[("upconv", i, 0)](x)

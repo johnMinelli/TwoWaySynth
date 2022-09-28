@@ -12,7 +12,7 @@ from model.network_utils.losses import depth_loss, get_depth_smoothness, photome
     VGGPerceptualLoss
 from model.network_utils.metrics import compute_depth_metrics
 from model.network_utils.nvs_decoder import NvsDecoder
-from model.network_utils.projection_layer import warp, transform_code
+from model.network_utils.projection_layer import inverse_warp, transform_code
 from model.network_utils.metrics import ssim
 from model.network_utils.projection_utils import get_RT, scale_K
 from model.network_utils.resnet_encoder import ResnetEncoder
@@ -184,7 +184,7 @@ class BaseModel():
         self.loss_warp, warped, diff = photometric_reconstruction_loss(self.real_B, self.real_A, self.intrinsics, self.depth_scales_b+[self.depth_b], self.real_RT)
 
         # Consistency loss to improve unskipped depth quality and warped depth quality
-        self.loss_skip = F.l1_loss(self.depth_a2b * (torch.median(self.depth_b) / torch.median(self.depth_a2b)), self.depth_b)
+        self.loss_skip = F.l1_loss(self.depth_a2b, self.depth_b)
 
         # Consistency loss to improve latent warped
         # self.loss_latent = F.l1_loss(self.z_a2b, self.z_b)

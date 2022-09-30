@@ -68,7 +68,7 @@ class BaseModel():
                 if self.isTrain:
                     self.start_epoch = self._load_network(model, load_dir=self.backup_dir, epoch_label=opt.continue_train, network_label=name)
                 else:
-                    self.start_epoch = self._load_network(model, load_dir=opt.models_path, epoch_label=opt.model_epoch, network_label=name)
+                    self._load_network(model, load_dir=opt.models_path, epoch_label=opt.model_epoch, network_label=name)
             else:
                 init_weights(model, init_type=opt.init_type)
 
@@ -121,14 +121,14 @@ class BaseModel():
         self.depth_b, self.depth_scales_b = self.depthdecode(self.z_b, self.z_features_b)  # for loss
         # self.fake_B_direct_map = self.warp_features([self.real_A], [self.real_depth_A], inverse=False)[0]  # for visual reference
 
-        # obtain features of A at B by warping via direct mapping
+        # get features of A at B by warping via direct mapping (additional depth_map is for feature from enc bottleneck)
         self.z_features_a2b_direct_map = self.warp_features(self.z_features_a, self.depth_scales_a[::-1]+[self.depth_scales_a[0]], inverse=False)
         # transform latent of A to B
         self.z_a2b = self.transform(self.z_a)  # [b,nz*3]
         # obtain the depth respect B view
         self.depth_a2b, self.depth_scales_a2b = self.depthdecode(self.z_a2b, self.z_features_a2b_direct_map)  # [max res], [features low to high res]
 
-        # again warp 'z_features_a' with better 'depth_scales_a2b' to obtain features for nvs skip connections
+        # again warp 'z_features_a' with better 'depth_scales_a2b' to obtain features usable as skip connections in nvs decoder
         self.z_features_a2b = self.warp_features(self.z_features_a, self.depth_scales_a2b[::-1]+[self.depth_scales_a2b[0]])
         self.fake_B3, self.fake_B2, self.fake_B1, self.fake_B = self.decode(self.z_a2b, self.z_features_a2b)
 
@@ -177,23 +177,23 @@ class BaseModel():
         # VGG perceptual loss
         self.loss_vgg = self.vgg(self.fake_B, self.real_B)
 
-        # Image with depth quality
-        self.loss_depth_smooth = get_depth_smoothness(self.depth_b, self.real_B) + get_depth_smoothness(self.depth_a, self.real_A)
-
         # Multiscale transformation/warping loss for depth quality: to supervise the warped scales
         self.loss_warp, warped, diff = photometric_reconstruction_loss(self.real_B, self.real_A, self.intrinsics, self.depth_scales_b+[self.depth_b], self.real_RT)
 
-        # Consistency loss to improve unskipped depth quality and warped depth quality
+        # Image with depth quality
+        self.loss_depth_smooth = get_depth_smoothness(self.depth_b, self.real_B) + get_depth_smoothness(self.depth_a, self.real_A)
+
+        # Consistency loss to improve depth quality with b and warped a2b
         self.loss_skip = F.l1_loss(self.depth_a2b, self.depth_b)
 
         # Consistency loss to improve latent warped
         # self.loss_latent = F.l1_loss(self.z_a2b, self.z_b)
 
-        self.loss_G = self.loss_reco * self.opt.lambda_recon  # 10.0
-        self.loss_G += self.loss_warp * self.opt.lambda_warp  # 10.0
-        self.loss_G += self.loss_skip * self.opt.lambda_consistency  # 1.0
-        self.loss_G += self.loss_vgg * self.opt.lambda_vgg  # 1.0
-        self.loss_G += self.loss_depth_smooth * self.opt.lambda_smooth  # 10.0
+        self.loss_G = self.loss_reco * self.opt.lambda_recon                # 100.0 (kitti) 100.0 (shapenet)
+        self.loss_G += self.loss_vgg * self.opt.lambda_vgg                  # 100.0 (kitti) 100.0 (shapenet)
+        self.loss_G += self.loss_warp * self.opt.lambda_warp                # 100.0 (kitti) 100.0 (shapenet)
+        self.loss_G += self.loss_depth_smooth * self.opt.lambda_smooth      # 25.0 (kitti) 10.0 (shapenet)
+        self.loss_G += self.loss_skip * self.opt.lambda_consistency         # 25.0 (kitti) 100.0 (shapenet)
 
         self.loss_G.backward()
 
@@ -223,9 +223,9 @@ class BaseModel():
 
     def get_current_metrics(self):
         """
-        Returns the metrics for the current inputs.
+        Get evaluation metrics relative to results of computation of current inputs.
+        :return: a dictionary with the metrics for the current inputs.
         """
-
         return OrderedDict({
                             'L1': F.l1_loss(self.fake_B, self.real_B).item(),
                             'SSIM': ssim(self.fake_B * 0.5 + 0.5, self.real_B * 0.5 + 0.5).item(),
@@ -235,10 +235,11 @@ class BaseModel():
 
     def get_current_visuals(self):
         """
-        Returns the images computed from current inputs.
+        Get images obtained from the computation of current inputs.
+        :return: a dictionary of images computed from current inputs.
         """
         mask = self.real_depth_B.data[0]<0
-        # depth_a2b = self.depth_a2b_skip.data[0]; depth_a2b_skip[mask] = -1
+        # depth_a2b = self.depth_a2b.data[0].detach().clone(); depth_a2b[mask] = -1
         depth_b = self.depth_b.data[0].detach().clone(); depth_b[mask] = -1
         return OrderedDict({'real_A': tensor2im(self.real_A.data[0]),
                             'real_B': tensor2im(self.real_B.data[0]),
@@ -274,6 +275,12 @@ class BaseModel():
         return self.anim_dict
 
     def switch_mode(self, mode):
+        """
+        Change the behaviour of the model.
+        Raise an error if the mode specified is not correct.
+        :param mode: mode to set. Allowed values are 'train' or 'eval'
+        :return: None
+        """
         assert(mode in ['train', 'eval'])
         self.train_mode = mode == "train"
         for name, model in self.net_dict.items():
@@ -281,15 +288,33 @@ class BaseModel():
             if mode == 'train': model.train()
 
     def print(self):
+        """
+        Print in console all networks details.
+        :return: None
+        """
         for _, model in self.net_dict.items():
             print_network(model)
 
     def save(self, epoch, save_dir=None):
+        """
+        Save the model.
+        :param epoch: epoch label
+        :param save_dir: path where to store the model
+        :return: None
+        """
         for name, model in self.net_dict.items():
             self._save_network(model, name, epoch, save_dir)
 
     # helper saving function that can be used by subclasses
     def _save_network(self, network, network_label, epoch_label, save_dir=None):
+        """
+        Internal function to save a network of the model.
+        :param network:  network instance to store
+        :param network_label: suffix of the network to identify the type
+        :param epoch_label: prefix of the network to identify the model version
+        :param save_dir: path where to store the network of the model
+        :return: None
+        """
         save_filename = '{:04}_net_{}.pth'.format(epoch_label, network_label)
         if save_dir is None: save_dir = self.backup_dir
         save_path = os.path.join(save_dir, save_filename)
@@ -297,6 +322,14 @@ class BaseModel():
 
     # helper loading function that can be used by subclasses
     def _load_network(self, network, network_label, epoch_label, load_dir=None):
+        """
+        Internal function to init network parameters with weights values saved.
+        :param network: network instance to init with loaded weights
+        :param network_label: suffix of the network to identify the type
+        :param epoch_label: prefix of the network to identify the model version
+        :param load_dir: path where to find the network if the model
+        :return: starting epoch number
+        """
         if load_dir is None: load_dir = self.backup_dir
         if epoch_label == -1:
             load_filename = '*_net_%s.pth' % (network_label)
@@ -305,10 +338,13 @@ class BaseModel():
             load_filename = '{:04}_net_{}.pth'.format(epoch_label, network_label)
             load_path = Path(os.path.join(load_dir, load_filename))
         network.load_state_dict(torch.load(load_path))
-        return int(load_path.name.split('_')[0])
+        return int(load_path.name.split('_')[0]) + 1
 
-    # update learning rate (called once every epoch)
     def update_learning_rate(self):
+        """
+        Update the learning rate value following the schedule instantiated.
+        :return: None
+        """
         for scheduler in self.schedulers:
            scheduler.step()
         lr = self.optimizers[0].param_groups[0]['lr']

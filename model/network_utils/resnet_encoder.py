@@ -54,6 +54,8 @@ class ResnetEncoder(nn.Module):
         self.features.append(self.encoder.layer2(self.features[-1]))
         self.features.append(self.encoder.layer3(self.features[-1]))
         self.features.append(self.encoder.layer4(self.features[-1]))
+        # apply bottleneck in channel dimension splitting last feature
         self.features += torch.split(self.features[-1], int(self.features[-1].size(1)-self.num_ch_enc[-1]), dim=1)  # ch_last feature - ch_bottleneck = 512 - 256
+        latent_compressed_flattened = self.fc(self.features[-1].view(input_image.size(0),-1))
 
-        return self.fc(self.features[-1].view(input_image.size(0),-1)), self.features[:-1]
+        return latent_compressed_flattened, self.features[:-1]

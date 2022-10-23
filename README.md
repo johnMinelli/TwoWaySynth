@@ -1,51 +1,38 @@
 # TwoWaySynth 
 
+Merging SIDE task + NVS task in a single pipeline self supervised
+
+[Documentation with approach explained](docs/main.pdf)
+
+[Presentation of the project](docs/ML4CV_project_discussion.pdf)
+
 ## Prerequisite
 
 ```bash
 pip3 install -r requirements.txt
 ```
-
-or install manually the following packages :
-
-```
-torch >= 1.8.1
-torchvision >= 0.9.1
-pandas
-matplotlib
-scipy
-scikit-image
-imageio
-argparse
-wandb
-tensorboardX
-dominate
-progressbar2
-termcolor
-path
-pebble
-tqdm
-```
-
-cd ./model/network_utils/resample2d_package
-rm -rf *_cuda.egg-info build dist __pycache__
-python3 setup.py install --user
-
+You will need also the [Direct Warp module](https://github.com/ClementPinard/direct-warper)
 
 ## Preparing training data
-Download ShapeNet dataset and run the following command
+ShapeNet dataset is already preformatted, you can download it from: [Google Drive](http://www.cvlibs.net/datasets/kitti/raw_data.php)
 
-For [KITTI](http://www.cvlibs.net/datasets/kitti/raw_data.php), first download the dataset using this [script](http://www.cvlibs.net/download.php?file=raw_data_downloader.zip) provided on the official website, and then run the following command. The `--depth` option will save resized copies of groundtruth depth. The `--with-pose` will dump the sequence pose
+For [KITTI](http://www.cvlibs.net/datasets/kitti/raw_data.php), first download the dataset using this [script](http://www.cvlibs.net/download.php?file=raw_data_downloader.zip) from the official website, and [depth](https://s3.eu-central-1.amazonaws.com/avg-kitti/data_depth_annotated.zip), and then run the following command. 
 ```bash
-python3 preprocess\prepare_data.py --data_path $DATA$/datasets/ShapeNet --dataset shapenet --dataset_format shapenet --height 256 --width 256 --dump_root $DATA$/datasets/ShapeNet_formatted --num_threads 1 --depth sparse --with_pose
+python3 preprocess\prepare_data.py --data_path $DATA$/datasets/ShapeNet --dataset kitti --height 256 --width 256 --dump_root $DATA$/datasets/ShapeNet_formatted --static_frames preprocess/static_frames.txt --num_threads 1 --depth sparse --with_pose
 ```
+The `--depth` option will save resized copies of ground truth depth. The `--with-pose` will dump the sequence pose
 
 ## Training
 Once the data are formatted following the above instructions, you should be able to train the model by running the following command
 ```bash
-python3 train.py --name shapenet --dataset shapenet --shuffle_batches --validate --data_path $DATA$/datasets/ShapeNet_formatted --depth sparse --train_file ./datasets/shapenet_chair_split/id_train.txt --test_file ./datasets/shapenet_chair_split/id_test.txt
+[ShapeNet] python3 train.py --dataset shapenet --data_path $DATA$/datasets/ShapeNet_formatted --train_file ./datasets/shapenet_chair_split/id_train.txt --test_file ./datasets/shapenet_chair_split/id_test.txt \
+ --batch_size 8 --lambda_recon 100 --lambda_warp 100 --lambda_vgg 100 --lambda_consistency 100 --lambda_smooth 10 --epochs 25 
+
+[KITTI] python3 train.py --dataset kitti --data_path $DATA$/datasets/KITTI_formatted --train_file ./datasets/kitti_split/eigen_train_files.txt --valid_file ./datasets/kitti_split/eigen_val_files.txt \
+ --batch_size 8 --lambda_recon 100 --lambda_warp 100 --lambda_vgg 100 --lambda_consistency 25 --lambda_smooth 25 --epochs 25 
 ```
-Additionally you can visualize metrics on Weight and Bias adding `--wandb` or setup tensorboard `--tensorbaord` and starting it
+
+Additionally, you can visualize metrics on Weight and Bias adding `--wandb` or setup tensorboard `--tensorbaord` and starting it
 ```bash
 tensorboard --logdir=save/
 ```
@@ -58,24 +45,14 @@ You can customize visualization with  `--display_freq 1 --display_port 8097`
 ## Evaluation
 Use a pretrained model to run the evaluation on images pairs 
 ```bash
-python3 eval.py --name shapenet --dataset shapenet --save_images --save_path ./save --models_path ./save/shapenet --data_path $DATA$/datasets/ShapeNet_formatted --test_file ./datasets/shapenet_chair_split/eval_pairs_40.txt --model_epoch 30
+[ShapeNet] python3 eval.py --dataset shapenet --save_images --save_path ./save --models_path ./save/shapenet/chair --data_path $DATA$/datasets/ShapeNet_formatted --test_file ./datasets/shapenet_chair_split/eval_pairs_40.txt --model_epoch -1
+
+[KITTI] python3 eval.py --dataset kitti --save_images --save_path ./save --models_path ./save/kitti --data_path $DATA$/datasets/ShapeNet_formatted --test_file ./datasets/kitti_split/eigen_test_files.txt --model_epoch -1
 ```
+In-painting (alternative to the above script) and dense depth rendering for KITTI depth evaluation has been computed with: https://github.com/wangq95/KITTI_Dense_Depth
+
 ## Pretrained Models
 
 [//]: # ([Chairs]&#40;https://drive.google.com/drive/folders/&#41;)
 [//]: # ([Cars]&#40;https://drive.google.com/drive/folders/&#41;)
-
-
-split from sfmlearner
-eval from sfmlearner
-https://github.com/tinghuiz/SfMLearner/blob/master/kitti_eval/eval_depth.py
-altro più completo
-https://github.com/cleinc/bts/blob/master/utils/eval_with_pngs.py#L50
-inpainting from densedepth as lapdepth
-https://gist.github.com/ialhashim/be6235489a9c43c6d240e8331836586a
-altri inpainting
-https://github.com/soulslicer/kitti_depthmap
-https://github.com/danxuhk/StructuredAttentionDepthEstimation/blob/master/StructuredAttentionDepthEstimation/utils/fill_depth_hole.py
-https://github.com/balcilar/DenseDepthMap
-most promising with MATLAB
-https://github.com/wangq95/KITTI_Dense_Depth
+[//]: # ([KITTI]&#40;https://drive.google.com/drive/folders/&#41;)

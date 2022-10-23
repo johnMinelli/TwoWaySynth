@@ -161,10 +161,10 @@ class Writer(object):
 class AverageMeter(object):
     """Computes and stores the average and current value"""
 
-    def __init__(self, n_meters=0, precision=3):
-        self.n_meters = n_meters
+    def __init__(self, n_metrics=0, precision=3):
+        self.n_metrics = n_metrics
         self.precision = precision
-        self.reset(self.n_meters)
+        self.reset(self.n_metrics)
 
     def reset(self, i):
         self.val = [0]*i
@@ -177,10 +177,10 @@ class AverageMeter(object):
         # check input and correct init
         if not isinstance(val, list):
             val = [val]
-        if self.n_meters == 0:
-            self.n_meters = len(val)
-            self.reset(self.n_meters)
-        assert(len(val) == self.n_meters)
+        if self.n_metrics == 0:
+            self.n_metrics = len(val)
+            self.reset(self.n_metrics)
+        assert(len(val) == self.n_metrics)
 
         # update
         self.count += n

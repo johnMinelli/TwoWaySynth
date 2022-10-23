@@ -49,7 +49,6 @@ class DepthDecoder(nn.Module):
 
     def forward(self, input_encoded, input_features):
         self.outputs = []
-        use_skips = input_features is not None and len(input_features) > 0
 
         x = self.fc(input_encoded).view(input_encoded.size(0), self.num_ch_bottleneck, self.final_dim, self.final_dim)
         x = torch.cat([x, input_features[-1]], 1)
@@ -57,7 +56,7 @@ class DepthDecoder(nn.Module):
         for i in range(4, -1, -1):
             x = self.convs[("upconv", i, 0)](x)
             x = upsample(x, mode=self.upsample_mode)
-            if use_skips and i > 0:
+            if i > 0:
                 x = [x, input_features[i - 1]]
                 x = torch.cat(x, 1)
                 x = self.convs[("upconv_s", i, 1)](x)

@@ -27,7 +27,7 @@ def main():
     # Loaders
     data_loader = torch.utils.data.DataLoader(
         eval_ds, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+        num_workers=0, pin_memory=True)
 
     visualizer = Visualizer(args)
     metrics = AverageMeter(precision=4)
@@ -43,7 +43,7 @@ def main():
         metrics.update(list(model.get_current_metrics().items()), current_batch_size)
 
         # to save images
-        visualizer.display_current_results(model.get_current_visuals(), i,  False)
+        visualizer.display_current_results(model.get_current_visuals(), i, False)
         visualizer.reset()
         # if i==5000: break
     avg_metrics = metrics.avg

@@ -34,8 +34,6 @@ class BaseModel():
     def __init__(self, opt):
         self.opt = opt
         self.gpu_ids = opt.gpu_ids
-        self.isTrain = opt.isTrain
-        self.category = opt.dataset
         self.start_epoch = 0
 
         self.train_mode = opt.isTrain
@@ -44,10 +42,10 @@ class BaseModel():
 
         # Setup training devices
         if opt.gpu_ids[0] < 0 or not torch.cuda.is_available():
-            print("%s on CPU" % ("Training" if self.isTrain else "Executing"))
+            print("%s on CPU" % ("Training" if opt.isTrain else "Executing"))
             self.device = torch.device("cpu")
         else:
-            print("%s on GPU" % ("Training" if self.isTrain else "Executing"))
+            print("%s on GPU" % ("Training" if opt.isTrain else "Executing"))
             if len(opt.gpu_ids) > 1:
                 os.environ["CUDA_VISIBLE_DEVICES"] = str(opt.gpu_ids)[1:-1]
             self.device = torch.device("cuda")
@@ -64,22 +62,22 @@ class BaseModel():
                          'depthdec': self.depthdec}
         param_list = []
         for name, model in self.net_dict.items():
-            if not self.isTrain or opt.continue_train is not None:
-                if self.isTrain:
+            if not opt.isTrain or opt.continue_train is not None:
+                if opt.isTrain:
                     self.start_epoch = self._load_network(model, load_dir=self.backup_dir, epoch_label=opt.continue_train, network_label=name)
                 else:
                     self._load_network(model, load_dir=opt.models_path, epoch_label=opt.model_epoch, network_label=name)
             else:
                 init_weights(model, init_type=opt.init_type)
 
-            if self.isTrain:
+            if opt.isTrain:
                 model.train()
                 param_list.append(model.parameters())
             else:
                 model.eval()
             print_network(model)
 
-        if self.isTrain:
+        if opt.isTrain:
             # initialize optimizers
             self.schedulers, self.optimizers = [], []
             self.optimizer_G = torch.optim.Adam(itertools.chain(*param_list), lr=opt.lr, betas=(opt.momentum, opt.beta), weight_decay=opt.weight_decay)
@@ -248,7 +246,6 @@ class BaseModel():
                             # 'fake_B_direct_map': tensor2im(self.fake_B_direct_map.data[0]),
                             'depth_B_warped': tensor2im(self.depth_a2b.data[0]),
                             # 'depth_B_warped_mask': tensor2im(depth_a2b.data[0]),
-                            'depth_B_scale3': tensor2im(self.depth_scales_b[3].data[0]),
                             'depth_B': tensor2im(self.depth_b.data[0]),
                             'depth_B_mask': tensor2im(depth_b),
                             })
@@ -263,8 +260,8 @@ class BaseModel():
         self.real_depth_B = self.real_depth_B[:1]
         self.intrinsics = self.intrinsics[:1]
 
-        NV = 60
-        for i in range(NV):
+        NV = 360
+        for i in range(0, NV, 4):
             pose = np.array([0, -(i-NV/2)*np.pi/180, 0, 0, 0, 0]) if self.opt.dataset in ['shapenet'] \
                 else np.array([0, 0, 0, 0, 0, i / 1000])
             self.real_RT = get_RT(pose, dataset_type=self.opt.dataset).to(self.device)

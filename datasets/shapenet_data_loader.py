@@ -56,7 +56,8 @@ class ShapeNetDataset(data.Dataset):
                 scene_path = self.data_root/scene_id
 
                 # Make samples for sampled object
-                for i in np.random.choice(list(range(self.positions-(self.args.max_az_distance*EL_RANGE))), 16):
+                # for i in np.random.choice(list(range(self.positions-(self.args.max_az_distance*EL_RANGE))), 16):
+                for i in range(self.positions-(self.args.max_az_distance*EL_RANGE)):
                     view_shift = ((((i//EL_RANGE) +  # in range [0, AZ_RANGE]
                                  np.random.randint(1, self.args.max_az_distance+1))*EL_RANGE) +  # random az distance
                                  np.random.randint(0, EL_RANGE) if self.args.rand_el_distance else i % 4)  # optional random el distance

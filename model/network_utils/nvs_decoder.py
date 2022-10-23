@@ -55,10 +55,10 @@ class NvsDecoder(nn.Module):
 
         for i in range(4, -1, -1):
             x = self.convs[("upconv", i, 0)](x)
-            x = [upsample(x, mode=self.upsample_mode)]
+            x = upsample(x, mode=self.upsample_mode)
             if i > 0:
-                x += [input_features[i-1]]
-            x = torch.cat(x, 1)
+                x = [x, input_features[i - 1]]
+                x = torch.cat(x, 1)
             x = self.convs[("upconv", i, 1)](x)
             if i in self.scales:
                 self.outputs += [self.convs[("predconv", i)](x)]

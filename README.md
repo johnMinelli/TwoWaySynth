@@ -1,10 +1,6 @@
-# TwoWaySynth 
+# Depth self-supervision for single image novel view synthesis 
 
-Merging SIDE task + NVS task in a single pipeline self supervised
-
-[Documentation with approach explained](docs/main.pdf)
-
-[Presentation of the project](docs/ML4CV_project_discussion.pdf)
+Merging Single Image Depth Estimation task with Novel View Synthesis in a single pipeline self supervised
 
 ## Prerequisite
 
@@ -51,7 +47,7 @@ Use a pretrained model to run the evaluation on images pairs
 ```
 In-painting (alternative to the above script) and dense depth rendering for KITTI depth evaluation has been computed with: https://github.com/wangq95/KITTI_Dense_Depth
 
-## Pretrained Models
+<!-- ## Pretrained Models -->
 
 [//]: # ([Chairs]&#40;https://drive.google.com/drive/folders/&#41;)
 [//]: # ([Cars]&#40;https://drive.google.com/drive/folders/&#41;)

@@ -21,7 +21,7 @@ The `--depth` option will save resized copies of ground truth depth. The `--with
 ## Training
 Once the data are formatted following the above instructions, you should be able to train the model by running the following command
 ```bash
-[ShapeNet] python3 train.py --dataset shapenet --data_path $DATA$/datasets/ShapeNet_formatted --train_file ./datasets/shapenet_chair_split/id_train.txt --test_file ./datasets/shapenet_chair_split/id_test.txt \
+[ShapeNet] python3 train.py --dataset shapenet --data_path $DATA$/datasets/ShapeNet_formatted --train_file ./datasets/shapenet_chair_split/id_train.txt --valid_file ./datasets/shapenet_chair_split/id_valid.txt \
  --batch_size 8 --lambda_recon 100 --lambda_warp 100 --lambda_vgg 100 --lambda_consistency 100 --lambda_smooth 10 --epochs 25 
 
 [KITTI] python3 train.py --dataset kitti --data_path $DATA$/datasets/KITTI_formatted --train_file ./datasets/kitti_split/eigen_train_files.txt --valid_file ./datasets/kitti_split/eigen_val_files.txt \

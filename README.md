@@ -52,3 +52,15 @@ In-painting (alternative to the above script) and dense depth rendering for KITT
 [//]: # ([Chairs]&#40;https://drive.google.com/drive/folders/&#41;)
 [//]: # ([Cars]&#40;https://drive.google.com/drive/folders/&#41;)
 [//]: # ([KITTI]&#40;https://drive.google.com/drive/folders/&#41;)
+
+## Cite
+```
+@misc{minelli2023depth,
+      title={Depth self-supervision for single image novel view synthesis}, 
+      author={Giovanni Minelli and Matteo Poggi and Samuele Salti},
+      year={2023},
+      eprint={2308.14108},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
+```

@@ -7,12 +7,12 @@ Merging Single Image Depth Estimation task with Novel View Synthesis in a single
 ```bash
 pip3 install -r requirements.txt
 ```
-You will need also the [Direct Warp module](https://github.com/ClementPinard/direct-warper)
+You will also need the [Direct Warp module](https://github.com/ClementPinard/direct-warper)
 
 ## Preparing training data
-ShapeNet dataset is already preformatted, you can download it from: [Google Drive](http://www.cvlibs.net/datasets/kitti/raw_data.php)
+ShapeNet dataset is already preformatted, you can download it from: [Google Drive](https://drive.google.com/file/d/1tpgl4Ts1TTYmD6gj-VdNa_4_8JAMK-N-/view?usp=sharing)
 
-For [KITTI](http://www.cvlibs.net/datasets/kitti/raw_data.php), first download the dataset using this [script](http://www.cvlibs.net/download.php?file=raw_data_downloader.zip) from the official website, and [depth](https://s3.eu-central-1.amazonaws.com/avg-kitti/data_depth_annotated.zip), and then run the following command. 
+For [KITTI](http://www.cvlibs.net/datasets/kitti/raw_data.php), first download the dataset using this [script](http://www.cvlibs.net/download.php?file=raw_data_downloader.zip) from the official website, and [depth data](https://s3.eu-central-1.amazonaws.com/avg-kitti/data_depth_annotated.zip), then run the following command. 
 ```bash
 python3 preprocess\prepare_data.py --data_path $DATA$/datasets/ShapeNet --dataset kitti --height 256 --width 256 --dump_root $DATA$/datasets/ShapeNet_formatted --static_frames preprocess/static_frames.txt --num_threads 1 --depth sparse --with_pose
 ```

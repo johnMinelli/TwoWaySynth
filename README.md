@@ -47,11 +47,11 @@ Use a pretrained model to run the evaluation on images pairs
 ```
 In-painting (alternative to the above script) and dense depth rendering for KITTI depth evaluation has been computed with: https://github.com/wangq95/KITTI_Dense_Depth
 
-<!-- ## Pretrained Models -->
+## Pretrained Models
 
-[//]: # ([Chairs]&#40;https://drive.google.com/drive/folders/&#41;)
-[//]: # ([Cars]&#40;https://drive.google.com/drive/folders/&#41;)
-[//]: # ([KITTI]&#40;https://drive.google.com/drive/folders/&#41;)
+[KITTI](https://drive.google.com/file/d/1Ss297w0LLsBgs1a6zZnl94cHaw5HJWA4/view?usp=sharing)
+[Cars](https://drive.google.com/file/d/1jq_-_4HvENywHIUjQoZvCPmxEA6985BU/view?usp=sharing)
+[Chairs](https://drive.google.com/file/d/1P1q7jdk402ymAZaJHUj7nskKBhZT5nWc/view?usp=sharing)
 
 ## Cite
 ```

@@ -55,12 +55,11 @@ In-painting (alternative to the above script) and dense depth rendering for KITT
 
 ## Cite
 ```
-@misc{minelli2023depth,
-      title={Depth self-supervision for single image novel view synthesis}, 
-      author={Giovanni Minelli and Matteo Poggi and Samuele Salti},
-      year={2023},
-      eprint={2308.14108},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
+@inproceedings{minelli2023iros,
+author = {Giovanni Minelli and Matteo Poggi and Samuele Salti},
+booktitle = {The 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+title = {Depth self-supervision for single image novel view synthesis},
+year = 2023,
+month = {oct}
 }
 ```
